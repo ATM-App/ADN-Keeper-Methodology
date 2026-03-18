@@ -20,7 +20,9 @@ const database = firebase.database();
 // 2. SISTEMA DE LOGIN Y ROLES HÍBRIDO
 // ==========================================
 const DEFAULT_USERS = {
-    "admin": { pass: "1234", role: "admin", name: "Director Metodología", initials: "DM" }
+    "admin": { pass: "1234", role: "admin", name: "Director Metodología", initials: "DM" },
+    "entrenador1": { pass: "1234", role: "trainer", name: "Juan Pérez", cat: "rendimiento", team: "Atleti Juvenil A", sede: "C.D. Alcalá", dbKey: "trainer1", initials: "JP" },
+    "entrenador2": { pass: "1234", role: "trainer", name: "Carlos López", cat: "desarrollo", team: "Atleti Cadete B", sede: "Cerro del Espino", dbKey: "trainer2", initials: "CL" }
 };
 
 let SYSTEM_USERS = JSON.parse(localStorage.getItem('atleti_system_users')) || DEFAULT_USERS;
@@ -141,15 +143,42 @@ window.abrirEditarEntrenador = function(uId) {
 
 function renderAdminPanel() {
     const grid = document.getElementById('admin-trainers-grid'); grid.innerHTML = '';
-    let globalVolumen = 0; let globalCarga = 0; let globalNat = { a:0, sa:0, g:0, jr:0 }; let entrenadoresTotales = 0;
+    let globalSesiones = 0; let globalSemanas = new Set(); let globalCarga = 0; let globalNat = { a:0, sa:0, g:0, jr:0 }; let entrenadoresTotales = 0;
     
     Object.entries(SYSTEM_USERS).forEach(([uId, user]) => {
-        let numTareasTrainer = 0;
+        let numSesionesTrainer = 0;
+        let semanasTrainer = new Set();
+
         if(user.role === 'trainer') {
             entrenadoresTotales++; 
             let dbTrainer = user.dbKey ? (JSON.parse(localStorage.getItem(`atleti_metodologia_v20_${user.dbKey}_general`)) || { fechas: {} }) : {fechas:{}};
-            Object.values(dbTrainer.fechas).forEach(d => { if(d.tareas) { numTareasTrainer += d.tareas.length; d.tareas.forEach(t => { globalVolumen++; if(t.carga) globalCarga += t.carga; if(t.naturaleza === 'analitica') globalNat.a++; if(t.naturaleza === 'semi_analitica') globalNat.sa++; if(t.naturaleza === 'global') globalNat.g++; if(t.naturaleza === 'juego_real') globalNat.jr++; }); } });
+            
+            Object.entries(dbTrainer.fechas).forEach(([fechaIso, d]) => { 
+                let isMatch = d.evento === 'partido';
+                
+                // Si el día tiene al menos una tarea y NO es partido, cuenta como 1 Sesión
+                if(d.tareas && d.tareas.length > 0 && !isMatch) { 
+                    numSesionesTrainer++;
+                    globalSesiones++;
+                    
+                    // Extraemos el Lunes de esa fecha para saber a qué semana (Microciclo) pertenece
+                    let dateObj = new Date(fechaIso + "T12:00:00");
+                    let msLunes = getMonday(dateObj).getTime();
+                    semanasTrainer.add(msLunes);
+                    globalSemanas.add(msLunes);
+
+                    d.tareas.forEach(t => { 
+                        if(t.carga) globalCarga += t.carga; 
+                        if(t.naturaleza === 'analitica') globalNat.a++; 
+                        if(t.naturaleza === 'semi_analitica') globalNat.sa++; 
+                        if(t.naturaleza === 'global') globalNat.g++; 
+                        if(t.naturaleza === 'juego_real') globalNat.jr++; 
+                    }); 
+                } 
+            });
         }
+        
+        let numMicrociclosTrainer = semanasTrainer.size;
         
         let catStr = user.role === 'admin' ? "👑 ADMINISTRADOR" : (user.cat === 'rendimiento' ? "Rendimiento" : (user.cat === 'desarrollo' ? "Desarrollo" : "Formación"));
         let avatarHtml = user.photo ? `<img src="${user.photo}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">` : user.initials;
@@ -164,14 +193,19 @@ function renderAdminPanel() {
             </div>
         `;
 
-        let statsInfo = user.role === 'admin' ? `<span>🛡️ <b>Control Total del Sistema</b></span>` : `<span>🛡️ <b>Equipo:</b> ${user.team}</span><span>📍 <b>Sede:</b> ${user.sede}</span><span>📊 <b>Volumen:</b> ${numTareasTrainer} tareas planificadas</span>`;
+        let statsInfo = user.role === 'admin' 
+            ? `<span>🛡️ <b>Control Total del Sistema</b></span>` 
+            : `<span>🛡️ <b>Equipo:</b> ${user.team}</span><span>📍 <b>Sede:</b> ${user.sede}</span><span style="color:var(--atleti-blue); font-weight:bold; margin-top:8px;">📊 Sesiones: ${numSesionesTrainer}</span><span style="color:var(--atleti-red); font-weight:bold;">📅 Microciclos: ${numMicrociclosTrainer}</span>`;
 
         grid.innerHTML += `<div class="trainer-card"><div class="trainer-card-header"><div class="trainer-avatar">${avatarHtml}</div><div class="trainer-info"><h3>${user.name}</h3><p style="color:${user.role==='admin'?'var(--atleti-red)':'#666'}">${catStr}</p></div></div><div class="trainer-details">${statsInfo}</div>${actionsHtml}</div>`;
     });
 
+    let globalMicrociclos = globalSemanas.size;
+
     if(adminGlobalChartInstance) adminGlobalChartInstance.destroy(); const ctxGlobal = document.getElementById('adminGlobalChart').getContext('2d');
     adminGlobalChartInstance = new Chart(ctxGlobal, { type: 'doughnut', data: { labels: ['Analítica', 'Semi-Analítica', 'Global', 'Juego Real'], datasets: [{ data: [globalNat.a, globalNat.sa, globalNat.g, globalNat.jr], backgroundColor: ['#9E9E9E', '#FF9800', '#2196f3', '#F44336'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' }, title: {display: true, text: 'Distribución de Especificidad de toda la Cantera'} } } });
-    document.getElementById('admin-kpis').innerHTML = `<li>👥 <b>Entrenadores Activos:</b> ${entrenadoresTotales}</li><li>📋 <b>Tareas Globales Programadas:</b> ${globalVolumen}</li><li>🔋 <b>Carga Total Generada:</b> ${globalCarga} UA</li><li>🔬 <b>Tendencia Academia:</b> ${globalNat.jr > globalNat.sa ? '<span style="color:#4CAF50">Alta (Juego Real)</span>' : '<span style="color:#FF9800">Media (Semi-Analítica)</span>'}</li>`;
+    
+    document.getElementById('admin-kpis').innerHTML = `<li>👥 <b>Entrenadores Activos:</b> ${entrenadoresTotales}</li><li>📊 <b>Sesiones Globales:</b> ${globalSesiones}</li><li>📅 <b>Microciclos Globales:</b> ${globalMicrociclos}</li><li>🔋 <b>Carga Total:</b> ${globalCarga} UA</li><li>🔬 <b>Tendencia Academia:</b> ${globalNat.jr > globalNat.sa ? '<span style="color:#4CAF50">Alta (Juego Real)</span>' : '<span style="color:#FF9800">Media (Semi-Analítica)</span>'}</li>`;
 }
 
 window.auditarEntrenador = function(dbKey, trainerName) {
@@ -477,6 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('encadenamiento-container').classList.add('hidden'); 
         document.getElementById('btn-limpiar-dia').classList.add('hidden'); 
         
+        // Reset Native Selects and trigger events for custom UI updates
         ['select-evento-especial', 'select-bloque', 'select-encadenamiento', 'select-naturaleza', 'select-concepto', 'select-gesto', 'select-via-salida'].forEach(id => {
             let el = document.getElementById(id);
             if(el) {
@@ -616,14 +651,13 @@ document.addEventListener('DOMContentLoaded', () => {
         html2pdf().set({ margin: 0, filename: 'Memoria.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(document.getElementById('informe-oficial-template')).save();
     });
 
-    // --- NUEVO GENERADOR PPTX (REPARADO Y AJUSTADO A 16:9) ---
+    // --- GENERADOR PPTX ---
     document.getElementById('btn-export-pptx').addEventListener('click', () => {
         let pptx = new PptxGenJS(); 
-        pptx.layout = 'LAYOUT_16x9'; // Slide es de 10 pulgadas de ancho x 5.625 pulgadas de alto
+        pptx.layout = 'LAYOUT_16x9'; 
         
         let slide = pptx.addSlide(); 
         
-        // Cabecera Atleti
         slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: 0.8, fill: "003366" });
         slide.addText("ADN KEEPER METHODOLOGY", { x: 0.5, y: 0.1, w: "40%", h: 0.4, fontSize: 18, bold: true, color: "FFFFFF", align: "left" });
         slide.addText("MEMORIA DE ENTRENAMIENTO", { x: 5.5, y: 0.1, w: "40%", h: 0.4, fontSize: 14, color: "FF9800", align: "right", italic: true });
@@ -651,7 +685,6 @@ document.addEventListener('DOMContentLoaded', () => {
             sData.push(sObj);
         });
 
-        // Calculamos anchos de columna para que el ancho total sea exactamente 9.0 pulgadas (deja 0.5 de margen a izquierda y derecha)
         let totalWidth = 9.0;
         let labelColWidth = 1.2;
         let weekColWidth = sData.length > 0 ? ((totalWidth - labelColWidth) / sData.length) : 0;
@@ -677,10 +710,8 @@ document.addEventListener('DOMContentLoaded', () => {
         rows.push(cF("Téc Ofe", "e0f7fa", "tO")); 
         rows.push(cF("Condic.", "f5f5f5", "c"));
         
-        // La tabla se inserta en x=0.5. Como mide 9.0 de ancho, terminará en x=9.5. Queda perfectamente centrada en el layout 16x9 (10 pulgadas).
         slide.addTable(rows, { x: 0.5, y: 1.3, w: totalWidth, colW: arrColW, border: { pt: 1, color: "CCCCCC" }, fill: "FFFFFF" }); 
         
-        // Footer
         slide.addText("Generado por ADN Keeper Methodology", { x: 0.5, y: 5.3, w: "90%", h: 0.2, fontSize: 8, color: "888888", align: "center" });
 
         pptx.writeFile({ fileName: `ADN_Keeper_${tituloCiclo.replace(/\s/g, '_')}.pptx` });
