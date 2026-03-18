@@ -17,7 +17,7 @@ if (!firebase.apps.length) {
 const database = firebase.database();
 
 // ==========================================
-// 2. SISTEMA DE LOGIN Y ROLES HÍBRIDO (TIEMPO REAL)
+// 2. SISTEMA DE LOGIN Y ROLES HÍBRIDO
 // ==========================================
 const DEFAULT_USERS = {
     "admin": { pass: "1234", role: "admin", name: "Director Metodología", initials: "DM" }
@@ -25,15 +25,13 @@ const DEFAULT_USERS = {
 
 let SYSTEM_USERS = JSON.parse(localStorage.getItem('atleti_system_users')) || DEFAULT_USERS;
 
-// Magia 1: Sincronización de Usuarios en Tiempo Real
+// Sincronización de Usuarios en Tiempo Real
 database.ref('system_users').on('value', (snapshot) => {
     if(snapshot.val()) {
         SYSTEM_USERS = snapshot.val();
         localStorage.setItem('atleti_system_users', JSON.stringify(SYSTEM_USERS));
         let viewAdmin = document.getElementById('view-admin');
-        if(viewAdmin && viewAdmin.classList.contains('active')) {
-            renderAdminPanel();
-        }
+        if(viewAdmin && viewAdmin.classList.contains('active')) renderAdminPanel();
     }
 });
 
@@ -67,19 +65,18 @@ function iniciarAplicacion() {
         document.getElementById('btn-nav-cal').classList.add('hidden'); document.getElementById('btn-nav-macro').classList.add('hidden'); document.getElementById('btn-nav-dash').classList.add('hidden'); document.getElementById('btn-nav-set').classList.add('hidden');
         document.getElementById('btn-nav-admin').click(); 
         
-        // Magia 2: El Admin escucha toda la actividad de la cantera en TIEMPO REAL
+        // El Admin escucha toda la actividad de la cantera en TIEMPO REAL
         database.ref('planificaciones').on('value', (snapshot) => {
             const allData = snapshot.val();
             if(allData) {
                 Object.keys(allData).forEach(dbK => {
                     Object.keys(allData[dbK]).forEach(perf => {
-                        localStorage.setItem(`atleti_metodologia_v20_${dbK}_${perf}`, JSON.stringify(allData[dbK][perf]));
+                        localStorage.setItem(`atleti_metodologia_v20_${dbK}_${perf}`, JSON.stringify(sanitizeDB(allData[dbK][perf])));
                     });
                 });
                 if(document.getElementById('view-admin').classList.contains('active')) renderAdminPanel();
             }
         });
-        
         renderAdminPanel();
     } else {
         document.getElementById('inspector-banner').classList.add('hidden');
@@ -110,7 +107,7 @@ function comprimirImagen(file, callback) {
 }
 
 // ==========================================
-// PANEL DE ADMINISTRADOR
+// PANEL DE ADMINISTRADOR Y MÉTRICAS
 // ==========================================
 let adminGlobalChartInstance = null;
 
@@ -168,13 +165,16 @@ function renderAdminPanel() {
 
         if(user.role === 'trainer') {
             entrenadoresTotales++; 
-            let dbTrainer = user.dbKey ? (JSON.parse(localStorage.getItem(`atleti_metodologia_v20_${user.dbKey}_general`)) || { fechas: {} }) : {fechas:{}};
+            let dbRaw = JSON.parse(localStorage.getItem(`atleti_metodologia_v20_${user.dbKey}_general`));
+            let dbTrainer = sanitizeDB(dbRaw);
             
             Object.entries(dbTrainer.fechas).forEach(([fechaIso, d]) => { 
                 let isMatch = d.evento === 'partido';
+                // Contar como sesión si hay tareas y NO es partido
                 if(d.tareas && d.tareas.length > 0 && !isMatch) { 
                     numSesionesTrainer++; globalSesiones++;
-                    let dateObj = new Date(fechaIso + "T12:00:00"); let msLunes = getMonday(dateObj).getTime();
+                    let dateObj = new Date(fechaIso + "T12:00:00"); 
+                    let msLunes = getMonday(dateObj).getTime();
                     semanasTrainer.add(msLunes); globalSemanas.add(msLunes);
 
                     d.tareas.forEach(t => { 
@@ -235,7 +235,7 @@ window.volverPanelAdmin = function() {
 };
 
 // ==========================================
-// 3. BASE DE DATOS METODOLÓGICA (CONEXIÓN NUBE)
+// 3. BASE DE DATOS METODOLÓGICA (CONEXIÓN NUBE Y SANITIZACIÓN)
 // ==========================================
 const metodologiaPorDefecto = {
     tecnica_defensiva: { "Pre acción": ["Posición básica"], "Desplazamientos": ["Paso lateral (distancia corta)", "Paso cruzado (distancia larga)", "Repliegue dorsal (distancia corta)", "Repliegue lateral (distancia larga)"], "Impulsos": ["Barrida", "Impulso y centro de gravedad en balones rasos", "Impulso y centro de gravedad en balones altos"], "Blocajes": ["Blocaje frontal raso", "Blocaje frontal media altura", "Blocaje lateral raso", "Blocaje lateral media altura"], "Desvíos": ["Desvío con dos manos", "Desvío raso con una mano", "Desvío alto con una mano", "Desvío a mano cambiada"], "1vs1": ["Posición de reducción de espacios", "1vs1: Cruz", "1vs1: Apertura"], "Reincorporaciones": ["Reincorporación tras blocaje", "Reincorporación a posición básica", "Reincorporación hacia mismo lado", "Reincorporación hacia lado contrario"], "Juego aéreo": ["Blocaje aéreo", "Despeje de puños: dos puños", "Despeje de puños: un puño", "Prolongaciones"] },
@@ -260,8 +260,19 @@ const alternativasInteligentes = { "1vs1: Cruz": { msg: "Sugerencia: Mantén la 
 
 let appDB = {}; 
 
+// MAGIA: El Sanitizador que previene que Firebase rompa la app al borrar objetos vacíos
+function sanitizeDB(db) {
+    if(!db) db = {};
+    if(!db.fechas) db.fechas = {};
+    if(!db.statsBloques) db.statsBloques = { tecnica_defensiva:0, tecnica_ofensiva:0, tactica_defensiva:0, tactica_ofensiva:0 };
+    if(!db.statsGestos) db.statsGestos = {};
+    if(!db.objetivoCiclo) db.objetivoCiclo = "equilibrio";
+    return db;
+}
+
 function cargarBaseDeDatos(dbKey, perfil) { 
-    return JSON.parse(localStorage.getItem(`atleti_metodologia_v20_${dbKey}_${perfil}`)) || { fechas: {}, statsBloques: { tecnica_defensiva:0, tecnica_ofensiva:0, tactica_defensiva:0, tactica_ofensiva:0 }, statsGestos: {}, objetivoCiclo: "equilibrio" }; 
+    let rawData = JSON.parse(localStorage.getItem(`atleti_metodologia_v20_${dbKey}_${perfil}`));
+    return sanitizeDB(rawData); 
 }
 
 function conectarBaseDeDatos(dbKey, perfil) {
@@ -279,7 +290,7 @@ function conectarBaseDeDatos(dbKey, perfil) {
     database.ref(currentDBListener).on('value', (snapshot) => {
         const cloudData = snapshot.val();
         if(cloudData) {
-            appDB = cloudData;
+            appDB = sanitizeDB(cloudData);
             localStorage.setItem(`atleti_metodologia_v20_${currentDBKey}_${perfilActual}`, JSON.stringify(appDB));
             
             if(document.getElementById('select-objetivo').value !== appDB.objetivoCiclo) document.getElementById('select-objetivo').value = appDB.objetivoCiclo;
@@ -290,6 +301,7 @@ function conectarBaseDeDatos(dbKey, perfil) {
 }
 
 function guardarBaseDeDatos() { 
+    appDB = sanitizeDB(appDB); // Aseguramos que está limpia antes de guardar
     localStorage.setItem(`atleti_metodologia_v20_${currentDBKey}_${perfilActual}`, JSON.stringify(appDB)); 
     database.ref(`planificaciones/${currentDBKey}/${perfilActual}`).set(appDB); 
 }
@@ -536,6 +548,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function mostrarAlerta(titulo, mensaje, esError, esWarningCognitivo = false) { const container = document.getElementById('alert-container'); let extraClass = esWarningCognitivo ? "warning-cog" : ""; let colorBorder = esError ? '#CB3524' : (esWarningCognitivo ? '#FF9800' : '#4CAF50'); if(esError && titulo.includes("MÉDICA")) extraClass = "critical-med"; container.innerHTML = `<div class="alert-box ${extraClass}" style="border-left-color: ${colorBorder}"><strong>${titulo}</strong><br>${mensaje}</div>`; setTimeout(() => container.innerHTML = '', 4500); }
 
     const autogenModal = document.getElementById('autogen-modal'); document.getElementById('btn-open-autogen').addEventListener('click', () => autogenModal.classList.remove('hidden')); document.getElementById('btn-close-autogen').addEventListener('click', () => autogenModal.classList.add('hidden')); function getLeastUsedTask(poolArray) { let minReps = Infinity; let bestTask = poolArray[0]; poolArray.forEach(task => { let reps = appDB.statsGestos[task.g] || 0; if(reps < minReps) { minReps = reps; bestTask = task; } }); return bestTask; }
+    
+    // IA Generador Sanitizado
     document.getElementById('btn-ejecutar-ia').addEventListener('click', () => {
         let diaPartido = parseInt(document.getElementById('ia-dia-partido').value); let perfilRival = document.getElementById('ia-perfil-rival').value; let trainingDaysNodes = document.querySelectorAll('input[name="ia-train-day"]:checked'); let trainingDays = Array.from(trainingDaysNodes).map(cb => parseInt(cb.value));
         if(trainingDays.length === 0) { alert("Selecciona al menos un día de entrenamiento."); return; } const hoy = new Date(); let lunes = getMonday(hoy);
@@ -546,6 +560,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const importModal = document.getElementById('import-text-modal'); document.getElementById('btn-open-import').addEventListener('click', () => importModal.classList.remove('hidden')); document.getElementById('btn-close-import').addEventListener('click', () => importModal.classList.add('hidden'));
+    
+    // Importador Sanitizado
     document.getElementById('btn-process-text').addEventListener('click', () => {
         const text = document.getElementById('ia-raw-text').value; if(!text) return; let lines = text.split('\n').map(l => l.trim()).filter(l => l !== ""); let currentWeekOffset = 0; let fechaBase = getPrimerLunesMeso(new Date()); let tareasAñadidas = 0;
         for (let i = 0; i < lines.length; i++) {
@@ -651,13 +667,13 @@ document.addEventListener('DOMContentLoaded', () => {
         html2pdf().set({ margin: 0, filename: 'Memoria.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(document.getElementById('informe-oficial-template')).save();
     });
 
+    // --- GENERADOR PPTX ---
     document.getElementById('btn-export-pptx').addEventListener('click', () => {
         let pptx = new PptxGenJS(); 
-        pptx.layout = 'LAYOUT_16x9'; // Slide es de 10 pulgadas de ancho x 5.625 pulgadas de alto
+        pptx.layout = 'LAYOUT_16x9'; 
         
         let slide = pptx.addSlide(); 
         
-        // Cabecera Atleti
         slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: "100%", h: 0.8, fill: "003366" });
         slide.addText("ADN KEEPER METHODOLOGY", { x: 0.5, y: 0.1, w: "40%", h: 0.4, fontSize: 18, bold: true, color: "FFFFFF", align: "left" });
         slide.addText("MEMORIA DE ENTRENAMIENTO", { x: 5.5, y: 0.1, w: "40%", h: 0.4, fontSize: 14, color: "FF9800", align: "right", italic: true });
@@ -685,7 +701,6 @@ document.addEventListener('DOMContentLoaded', () => {
             sData.push(sObj);
         });
 
-        // Calculamos anchos de columna para que el ancho total sea exactamente 9.0 pulgadas (deja 0.5 de margen a izquierda y derecha)
         let totalWidth = 9.0;
         let labelColWidth = 1.2;
         let weekColWidth = sData.length > 0 ? ((totalWidth - labelColWidth) / sData.length) : 0;
@@ -711,10 +726,8 @@ document.addEventListener('DOMContentLoaded', () => {
         rows.push(cF("Téc Ofe", "e0f7fa", "tO")); 
         rows.push(cF("Condic.", "f5f5f5", "c"));
         
-        // La tabla se inserta en x=0.5. Como mide 9.0 de ancho, terminará en x=9.5. Queda perfectamente centrada en el layout 16x9 (10 pulgadas).
         slide.addTable(rows, { x: 0.5, y: 1.3, w: totalWidth, colW: arrColW, border: { pt: 1, color: "CCCCCC" }, fill: "FFFFFF" }); 
         
-        // Footer
         slide.addText("Generado por ADN Keeper Methodology", { x: 0.5, y: 5.3, w: "90%", h: 0.2, fontSize: 8, color: "888888", align: "center" });
 
         pptx.writeFile({ fileName: `ADN_Keeper_${tituloCiclo.replace(/\s/g, '_')}.pptx` });
@@ -769,6 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (option.disabled) return;
                         
                         select.selectedIndex = index;
+                        select.value = option.value; // Forzado absoluto del valor
                         triggerText.textContent = option.text;
                         
                         wrapper.classList.remove('open');
