@@ -17,7 +17,7 @@ if (!firebase.apps.length) {
 const database = firebase.database();
 
 // ==========================================
-// 2. SISTEMA DE LOGIN Y ROLES HÍBRIDO (AISLADO PARA GK)
+// 2. SISTEMA DE LOGIN Y ROLES HÍBRIDO (AISLADO PARA PORTEROS)
 // ==========================================
 const DEFAULT_USERS = {
     "admin": { pass: "1234", role: "admin", name: "Director Metodología", initials: "DM" }
@@ -65,7 +65,7 @@ function iniciarAplicacion() {
         document.getElementById('btn-nav-cal').classList.add('hidden'); document.getElementById('btn-nav-macro').classList.add('hidden'); document.getElementById('btn-nav-dash').classList.add('hidden'); document.getElementById('btn-nav-set').classList.add('hidden');
         document.getElementById('btn-nav-admin').click(); 
         
-        // El Admin escucha toda la actividad de la cantera (Ruta Aislada)
+        // El Admin escucha toda la actividad de la cantera (Ruta Aislada planificaciones_gk)
         database.ref('planificaciones_gk').on('value', (snapshot) => {
             const allData = snapshot.val();
             if(allData) {
@@ -501,6 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
         guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); importModal.classList.add('hidden'); document.getElementById('ia-raw-text').value = ""; mostrarAlerta("🤖 Traductor Completado", `Se han volcado ${tareasAñadidas} tareas al mes actual.`, false);
     });
 
+    // COMPARATIVA HISTÓRICA
     function poblarSelectoresComparativa() {
         let mesesUnicos = new Set(); Object.keys(appDB.fechas).forEach(iso => { mesesUnicos.add(iso.substring(0, 7)); }); let mesesArr = Array.from(mesesUnicos).sort(); let selA = document.getElementById('compare-mes-a'); let selB = document.getElementById('compare-mes-b'); selA.innerHTML = ''; selB.innerHTML = '';
         if(mesesArr.length === 0) { selA.innerHTML = '<option value="">Sin datos</option>'; selB.innerHTML = '<option value="">Sin datos</option>'; return; }
@@ -523,6 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
         actThermo('thermo-status-a', 'thermo-compare-a', statsA); actThermo('thermo-status-b', 'thermo-compare-b', statsB); document.getElementById('compare-results-container').classList.remove('hidden');
     });
 
+    // EXPORTACIONES A PDF / PPTX
     document.getElementById('btn-export-calendario').addEventListener('click', () => { html2pdf().set({ margin: 5, filename: `Planificacion.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } }).from(document.getElementById('calendario-container')).save(); });
     document.getElementById('btn-export-dashboard').addEventListener('click', () => { html2pdf().set({ margin: 10, filename: `Graficos.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } }).from(document.getElementById('pdf-dashboard')).save(); });
     document.getElementById('btn-memoria-anual').addEventListener('click', () => {
@@ -535,6 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
         html2pdf().set({ margin: 0, filename: 'Memoria.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(document.getElementById('informe-oficial-template')).save();
     });
 
+    // --- GENERADOR PPTX ---
     document.getElementById('btn-export-pptx').addEventListener('click', () => {
         let pptx = new PptxGenJS(); 
         pptx.layout = 'LAYOUT_16x9'; 
@@ -600,18 +603,24 @@ document.addEventListener('DOMContentLoaded', () => {
         pptx.writeFile({ fileName: `ADN_Keeper_${tituloCiclo.replace(/\s/g, '_')}.pptx` });
     });
 
+    // ==========================================
+    // SISTEMA DE DESPLEGABLES PERSONALIZADOS
+    // ==========================================
     function setupCustomSelects() {
         document.querySelectorAll('select.custom-select-auto').forEach(select => {
             if (select.dataset.customized) return;
             select.dataset.customized = true;
 
+            // Ocultar nativo
             select.style.display = 'none';
 
+            // Wrapper
             const wrapper = document.createElement('div');
             wrapper.className = 'custom-select-wrapper';
             select.parentNode.insertBefore(wrapper, select);
             wrapper.appendChild(select);
 
+            // Trigger
             const trigger = document.createElement('div');
             trigger.className = 'custom-select-trigger glass-input';
             const triggerText = document.createElement('span');
@@ -624,6 +633,7 @@ document.addEventListener('DOMContentLoaded', () => {
             trigger.appendChild(arrow);
             wrapper.appendChild(trigger);
 
+            // Options container
             const optionsContainer = document.createElement('div');
             optionsContainer.className = 'custom-select-options';
             wrapper.appendChild(optionsContainer);
@@ -685,6 +695,27 @@ document.addEventListener('DOMContentLoaded', () => {
     setupCustomSelects();
 
 });
+
+// --- RENDERIZADO DEL MACROCICLO GANTT ---
+window.renderMacrociclo = function() {
+    const container = document.getElementById('gantt-container'); container.innerHTML = '';
+    const mesesNombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    let hoy = new Date(); let startYear = hoy.getMonth() >= 6 ? hoy.getFullYear() : hoy.getFullYear() - 1; let sequence = [7,8,9,10,11,0,1,2,3,4,5]; 
+    sequence.forEach(monthIndex => {
+        let actualYear = monthIndex >= 7 ? startYear : startYear + 1; let primerDiaMes = new Date(actualYear, monthIndex, 1);
+        let monthDiv = document.createElement('div'); monthDiv.className = 'gantt-month'; let htmlSemanas = `<div class="gantt-month-header">${mesesNombres[monthIndex]} ${actualYear}</div><div class="gantt-weeks">`;
+        let currentLunes = getPrimerLunesMeso(primerDiaMes); let ultimoLunes = getUltimoLunesMeso(new Date(actualYear, monthIndex + 1, 0));
+        let numSemanas = Math.round((ultimoLunes - currentLunes) / (7 * 24 * 60 * 60 * 1000)) + 1;
+        for(let s = 0; s < numSemanas; s++) {
+            let fechaSemana = new Date(currentLunes); fechaSemana.setDate(fechaSemana.getDate() + (s * 7)); let isoLunes = toLocalISO(fechaSemana);
+            let claseFase = 'phase-comp'; if(monthIndex === 7) claseFase = 'phase-pre'; if(monthIndex === 11 && s > 2) claseFase = 'phase-break'; if(monthIndex === 5 && s > 1) claseFase = 'phase-break'; 
+            let numTareas = 0; for(let i=0; i<7; i++) { let d = new Date(fechaSemana); d.setDate(d.getDate()+i); let iso = toLocalISO(d); if(appDB.fechas[iso] && appDB.fechas[iso].tareas) numTareas += appDB.fechas[iso].tareas.length; }
+            let heightBar = numTareas === 0 ? 5 : Math.min(100, (numTareas * 10));
+            htmlSemanas += `<div class="gantt-week ${claseFase}" title="Ver Microciclo"><div class="gantt-tooltip">Micro ${fechaSemana.getDate()}/${fechaSemana.getMonth()+1}<br>${numTareas} Tareas</div><div class="gantt-bar" style="height: ${heightBar}px;"></div></div>`;
+        }
+        htmlSemanas += `</div>`; monthDiv.innerHTML = htmlSemanas; container.appendChild(monthDiv);
+    });
+}
 
 window.pintarDatosGuardados = function() {
     document.querySelectorAll('.day-context-box').forEach(el => el.innerHTML = ''); 
@@ -769,3 +800,24 @@ window.renderizarGraficos = function() {
     let avgCog = totalTareasCog > 0 ? (totalCog / totalTareasCog) : 0; let percentThermo = (avgCog / 3) * 100;
     document.getElementById('thermo-bar').style.width = `${percentThermo}%`; document.getElementById('thermo-bar').className = 'thermo-fill ' + (avgCog < 1.6 ? 'thermo-low' : (avgCog < 2.5 ? 'thermo-med' : 'thermo-high')); document.getElementById('thermo-status').innerText = avgCog === 0 ? "Sin datos" : (avgCog < 1.6 ? "Baja" : (avgCog < 2.5 ? "Media" : "Alta"));
 };
+
+function inicializarDragAndDrop() {
+    document.querySelectorAll('.task-list').forEach(list => {
+        new Sortable(list, { group: 'tareas-semanales', animation: 150, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag',
+            onEnd: function (evt) {
+                const fromDateStr = evt.from.id.replace('list-', ''); const toDateStr = evt.to.id.replace('list-', ''); const oldIndex = evt.oldIndex; const newIndex = evt.newIndex;
+                if (fromDateStr === toDateStr && oldIndex === newIndex) return;
+                const tareaMovida = appDB.fechas[fromDateStr].tareas.splice(oldIndex, 1)[0];
+                if (!appDB.fechas[toDateStr]) { appDB.fechas[toDateStr] = { evento: "", contexto: { condicional: "", emocional: "", transversal: "" }, tareas: [] }; }
+                let fechaDestinoObj = new Date(toDateStr + "T12:00:00"); fechaDestinoObj.setDate(fechaDestinoObj.getDate() + 1); let isMD1 = (appDB.fechas[toLocalISO(fechaDestinoObj)] && appDB.fechas[toLocalISO(fechaDestinoObj)].evento === 'partido');
+                if (isMD1 && (tareaMovida.gesto.includes("1vs1") || tareaMovida.gesto.includes("aéreo") || tareaMovida.gesto.includes("Desvío"))) { appDB.fechas[fromDateStr].tareas.splice(oldIndex, 0, tareaMovida); setTimeout(() => location.reload(), 2500); alert(`🚨 ALERTA (MD-1)\nNo puedes mover "${tareaMovida.gesto}" a un día pre-partido.`); return; }
+                appDB.fechas[toDateStr].tareas.splice(newIndex, 0, tareaMovida); guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados();
+            }
+        });
+    });
+}
+
+let plantillasGuardadas = JSON.parse(localStorage.getItem('atleti_templates_gk')) || {};
+window.abrirModalPlantilla = function(isoLunes) { document.getElementById('template-iso-lunes').value = isoLunes; document.getElementById('input-template-name').value = ""; document.getElementById('template-modal').classList.remove('hidden'); };
+window.cargarPlantillaPrompt = function(isoLunesDestino) { let nombres = Object.keys(plantillasGuardadas); if(nombres.length === 0) return alert("Sin plantillas."); let msj = "NÚMERO de plantilla:\n"; nombres.forEach((n, i) => msj += `${i+1}. ${n}\n`); let seleccion = prompt(msj); if(seleccion && !isNaN(seleccion) && seleccion > 0 && seleccion <= nombres.length) { let nombreElegido = nombres[seleccion-1]; let semanaData = plantillasGuardadas[nombreElegido]; let fecha = new Date(isoLunesDestino + "T12:00:00"); for(let i=0; i<7; i++) { let currentISO = toLocalISO(fecha); if(semanaData[i]) { appDB.fechas[currentISO] = JSON.parse(JSON.stringify(semanaData[i])); if(appDB.fechas[currentISO].tareas) { appDB.fechas[currentISO].tareas.forEach(t => { appDB.statsBloques[t.bloqueID] = (appDB.statsBloques[t.bloqueID] || 0) + 1; appDB.statsGestos[t.gesto] = (appDB.statsGestos[t.gesto] || 0) + 1; }); } } fecha.setDate(fecha.getDate() + 1); } guardarBaseDeDatos(); location.reload(); } };
+document.getElementById('btn-confirm-save-template').addEventListener('click', () => { let isoLunes = document.getElementById('template-iso-lunes').value; let nombre = document.getElementById('input-template-name').value; if(!nombre) return alert("Ponle nombre"); let semanaData = []; let fecha = new Date(isoLunes + "T12:00:00"); for(let i=0; i<7; i++) { let currentISO = toLocalISO(fecha); semanaData.push(appDB.fechas[currentISO] ? JSON.parse(JSON.stringify(appDB.fechas[currentISO])) : null); fecha.setDate(fecha.getDate() + 1); } plantillasGuardadas[nombre] = semanaData; localStorage.setItem('atleti_templates_gk', JSON.stringify(plantillasGuardadas)); document.getElementById('template-modal').classList.add('hidden'); alert("Guardada"); });
