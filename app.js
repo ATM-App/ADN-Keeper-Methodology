@@ -17,27 +17,27 @@ if (!firebase.apps.length) {
 const database = firebase.database();
 
 // ==========================================
-// 2. SISTEMA DE LOGIN Y ROLES HÍBRIDO
+// 2. SISTEMA DE LOGIN Y ROLES HÍBRIDO (AISLADO PARA GK)
 // ==========================================
 const DEFAULT_USERS = {
     "admin": { pass: "1234", role: "admin", name: "Director Metodología", initials: "DM" }
 };
 
-let SYSTEM_USERS = JSON.parse(localStorage.getItem('atleti_system_users')) || DEFAULT_USERS;
+let SYSTEM_USERS = JSON.parse(localStorage.getItem('atleti_system_users_gk')) || DEFAULT_USERS;
 
-// Sincronización de Usuarios en Tiempo Real
-database.ref('system_users').on('value', (snapshot) => {
+// Sincronización de Usuarios en Tiempo Real (Ruta Aislada)
+database.ref('system_users_gk').on('value', (snapshot) => {
     if(snapshot.val()) {
         SYSTEM_USERS = snapshot.val();
-        localStorage.setItem('atleti_system_users', JSON.stringify(SYSTEM_USERS));
+        localStorage.setItem('atleti_system_users_gk', JSON.stringify(SYSTEM_USERS));
         let viewAdmin = document.getElementById('view-admin');
         if(viewAdmin && viewAdmin.classList.contains('active')) renderAdminPanel();
     }
 });
 
 function saveSystemUsers() { 
-    localStorage.setItem('atleti_system_users', JSON.stringify(SYSTEM_USERS)); 
-    database.ref('system_users').set(SYSTEM_USERS); 
+    localStorage.setItem('atleti_system_users_gk', JSON.stringify(SYSTEM_USERS)); 
+    database.ref('system_users_gk').set(SYSTEM_USERS); 
 }
 
 let currentUser = null; let perfilActual = 'general'; let currentDBKey = 'general'; let currentDBListener = null;
@@ -65,13 +65,13 @@ function iniciarAplicacion() {
         document.getElementById('btn-nav-cal').classList.add('hidden'); document.getElementById('btn-nav-macro').classList.add('hidden'); document.getElementById('btn-nav-dash').classList.add('hidden'); document.getElementById('btn-nav-set').classList.add('hidden');
         document.getElementById('btn-nav-admin').click(); 
         
-        // El Admin escucha toda la actividad de la cantera en TIEMPO REAL
-        database.ref('planificaciones').on('value', (snapshot) => {
+        // El Admin escucha toda la actividad de la cantera (Ruta Aislada)
+        database.ref('planificaciones_gk').on('value', (snapshot) => {
             const allData = snapshot.val();
             if(allData) {
                 Object.keys(allData).forEach(dbK => {
                     Object.keys(allData[dbK]).forEach(perf => {
-                        localStorage.setItem(`atleti_metodologia_v20_${dbK}_${perf}`, JSON.stringify(sanitizeDB(allData[dbK][perf])));
+                        localStorage.setItem(`atleti_metodologia_gk_${dbK}_${perf}`, JSON.stringify(sanitizeDB(allData[dbK][perf])));
                     });
                 });
                 if(document.getElementById('view-admin').classList.contains('active')) renderAdminPanel();
@@ -165,16 +165,14 @@ function renderAdminPanel() {
 
         if(user.role === 'trainer') {
             entrenadoresTotales++; 
-            let dbRaw = JSON.parse(localStorage.getItem(`atleti_metodologia_v20_${user.dbKey}_general`));
+            let dbRaw = JSON.parse(localStorage.getItem(`atleti_metodologia_gk_${user.dbKey}_general`));
             let dbTrainer = sanitizeDB(dbRaw);
             
             Object.entries(dbTrainer.fechas).forEach(([fechaIso, d]) => { 
                 let isMatch = d.evento === 'partido';
-                // Contar como sesión si hay tareas y NO es partido
                 if(d.tareas && d.tareas.length > 0 && !isMatch) { 
                     numSesionesTrainer++; globalSesiones++;
-                    let dateObj = new Date(fechaIso + "T12:00:00"); 
-                    let msLunes = getMonday(dateObj).getTime();
+                    let dateObj = new Date(fechaIso + "T12:00:00"); let msLunes = getMonday(dateObj).getTime();
                     semanasTrainer.add(msLunes); globalSemanas.add(msLunes);
 
                     d.tareas.forEach(t => { 
@@ -235,7 +233,7 @@ window.volverPanelAdmin = function() {
 };
 
 // ==========================================
-// 3. BASE DE DATOS METODOLÓGICA (CONEXIÓN NUBE Y SANITIZACIÓN)
+// 3. BASE DE DATOS METODOLÓGICA (CONEXIÓN NUBE AISLADA)
 // ==========================================
 const metodologiaPorDefecto = {
     tecnica_defensiva: { "Pre acción": ["Posición básica"], "Desplazamientos": ["Paso lateral (distancia corta)", "Paso cruzado (distancia larga)", "Repliegue dorsal (distancia corta)", "Repliegue lateral (distancia larga)"], "Impulsos": ["Barrida", "Impulso y centro de gravedad en balones rasos", "Impulso y centro de gravedad en balones altos"], "Blocajes": ["Blocaje frontal raso", "Blocaje frontal media altura", "Blocaje lateral raso", "Blocaje lateral media altura"], "Desvíos": ["Desvío con dos manos", "Desvío raso con una mano", "Desvío alto con una mano", "Desvío a mano cambiada"], "1vs1": ["Posición de reducción de espacios", "1vs1: Cruz", "1vs1: Apertura"], "Reincorporaciones": ["Reincorporación tras blocaje", "Reincorporación a posición básica", "Reincorporación hacia mismo lado", "Reincorporación hacia lado contrario"], "Juego aéreo": ["Blocaje aéreo", "Despeje de puños: dos puños", "Despeje de puños: un puño", "Prolongaciones"] },
@@ -244,15 +242,15 @@ const metodologiaPorDefecto = {
     tactica_ofensiva: { "Ataque organizado": ["Desmarques de apoyo (movimientos sin balón)", "Salida de balón (Generar superioridad zona de inicio)", "Detectar hombre libre en zonas intermedias (creación)", "Detectar situaciones de igualdad o superioridad en zonas de finalización (mirar lejos)", "Despejes orientados"], "Transición ofensiva": ["Búsqueda de contraataque"] }
 };
 
-let metodologia = JSON.parse(localStorage.getItem('atleti_diccionario')) || JSON.parse(JSON.stringify(metodologiaPorDefecto));
+let metodologia = JSON.parse(localStorage.getItem('atleti_diccionario_gk')) || JSON.parse(JSON.stringify(metodologiaPorDefecto));
 
-database.ref('diccionario_metodologia').on('value', (snapshot) => {
-    if(snapshot.val()) { metodologia = snapshot.val(); localStorage.setItem('atleti_diccionario', JSON.stringify(metodologia)); if(document.getElementById('view-settings').classList.contains('active')) renderSettingsUI(); }
+database.ref('diccionario_metodologia_gk').on('value', (snapshot) => {
+    if(snapshot.val()) { metodologia = snapshot.val(); localStorage.setItem('atleti_diccionario_gk', JSON.stringify(metodologia)); if(document.getElementById('view-settings').classList.contains('active')) renderSettingsUI(); }
 });
 
 function guardarDiccionario() { 
-    localStorage.setItem('atleti_diccionario', JSON.stringify(metodologia)); 
-    database.ref('diccionario_metodologia').set(metodologia); 
+    localStorage.setItem('atleti_diccionario_gk', JSON.stringify(metodologia)); 
+    database.ref('diccionario_metodologia_gk').set(metodologia); 
 }
 window.resetMetodologia = function() { if(confirm("¿Restaurar los gestos por defecto? Perderás los personalizados.")) { metodologia = JSON.parse(JSON.stringify(metodologiaPorDefecto)); guardarDiccionario(); location.reload(); } }
 
@@ -260,10 +258,15 @@ const alternativasInteligentes = { "1vs1: Cruz": { msg: "Sugerencia: Mantén la 
 
 let appDB = {}; 
 
-// MAGIA: El Sanitizador que previene que Firebase rompa la app al borrar objetos vacíos
 function sanitizeDB(db) {
     if(!db) db = {};
     if(!db.fechas) db.fechas = {};
+    
+    Object.keys(db.fechas).forEach(iso => {
+        if(!db.fechas[iso].tareas) db.fechas[iso].tareas = [];
+        if(!db.fechas[iso].contexto) db.fechas[iso].contexto = { condicional: "", emocional: "", transversal: "" };
+    });
+
     if(!db.statsBloques) db.statsBloques = { tecnica_defensiva:0, tecnica_ofensiva:0, tactica_defensiva:0, tactica_ofensiva:0 };
     if(!db.statsGestos) db.statsGestos = {};
     if(!db.objetivoCiclo) db.objetivoCiclo = "equilibrio";
@@ -271,7 +274,7 @@ function sanitizeDB(db) {
 }
 
 function cargarBaseDeDatos(dbKey, perfil) { 
-    let rawData = JSON.parse(localStorage.getItem(`atleti_metodologia_v20_${dbKey}_${perfil}`));
+    let rawData = JSON.parse(localStorage.getItem(`atleti_metodologia_gk_${dbKey}_${perfil}`));
     return sanitizeDB(rawData); 
 }
 
@@ -281,29 +284,30 @@ function conectarBaseDeDatos(dbKey, perfil) {
     
     appDB = cargarBaseDeDatos(currentDBKey, perfilActual);
     document.getElementById('select-objetivo').value = appDB.objetivoCiclo;
-    generarCalendario(document.getElementById('select-ciclo').value);
+    if(window.generarCalendario) window.generarCalendario(document.getElementById('select-ciclo').value);
     
     if(currentDBListener) database.ref(currentDBListener).off(); 
     
-    currentDBListener = `planificaciones/${currentDBKey}/${perfilActual}`;
+    currentDBListener = `planificaciones_gk/${currentDBKey}/${perfilActual}`;
     
     database.ref(currentDBListener).on('value', (snapshot) => {
         const cloudData = snapshot.val();
         if(cloudData) {
             appDB = sanitizeDB(cloudData);
-            localStorage.setItem(`atleti_metodologia_v20_${currentDBKey}_${perfilActual}`, JSON.stringify(appDB));
+            localStorage.setItem(`atleti_metodologia_gk_${currentDBKey}_${perfilActual}`, JSON.stringify(appDB));
             
             if(document.getElementById('select-objetivo').value !== appDB.objetivoCiclo) document.getElementById('select-objetivo').value = appDB.objetivoCiclo;
-            if(document.getElementById('view-calendario').classList.contains('active')) pintarDatosGuardados();
-            if(document.getElementById('view-dashboard').classList.contains('active')) renderizarGraficos();
+            
+            if(document.getElementById('view-calendario').classList.contains('active') && window.pintarDatosGuardados) window.pintarDatosGuardados();
+            if(document.getElementById('view-dashboard').classList.contains('active') && window.renderizarGraficos) window.renderizarGraficos();
         }
     });
 }
 
 function guardarBaseDeDatos() { 
-    appDB = sanitizeDB(appDB); // Aseguramos que está limpia antes de guardar
-    localStorage.setItem(`atleti_metodologia_v20_${currentDBKey}_${perfilActual}`, JSON.stringify(appDB)); 
-    database.ref(`planificaciones/${currentDBKey}/${perfilActual}`).set(appDB); 
+    appDB = sanitizeDB(appDB); 
+    localStorage.setItem(`atleti_metodologia_gk_${currentDBKey}_${perfilActual}`, JSON.stringify(appDB)); 
+    database.ref(`planificaciones_gk/${currentDBKey}/${perfilActual}`).set(appDB); 
 }
 
 function analizarGesto(gesto, bloque) {
@@ -323,7 +327,6 @@ function getUltimoLunesMeso(d) { let lastDay = new Date(d.getFullYear(), d.getMo
 
 let diaYsemanaActual = ""; let adnChartInstance = null; let balanceChartInstance = null; let realizadoChartInstance = null; let cargaChartInstance = null; let compareRadarChartInstance = null; let matrizChartInstance = null;
 
-// LÓGICA VISTA AJUSTES
 let setBloqueActual = "tecnica_defensiva"; let setConceptoActual = null;
 function renderSettingsUI() {
     const listConceptos = document.getElementById('set-concept-list'); const listGestos = document.getElementById('set-gesto-list'); const tituloConcepto = document.getElementById('set-concepto-title'); const formGestos = document.getElementById('set-gesto-controls');
@@ -357,7 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
             navBtns.forEach(b => b.classList.remove('active')); btn.classList.add('active');
             const targetId = btn.getAttribute('data-target');
             views.forEach(v => { if (v.id === targetId) { v.classList.remove('hidden'); v.classList.add('active'); } else { v.classList.add('hidden'); v.classList.remove('active'); } });
-            if(targetId === 'view-dashboard') { renderizarGraficos(); poblarSelectoresComparativa(); }
+            if(targetId === 'view-dashboard') { window.renderizarGraficos(); poblarSelectoresComparativa(); }
             if(targetId === 'view-settings') renderSettingsUI(); 
             if(targetId === 'view-macro') renderMacrociclo();
         });
@@ -366,6 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('select-objetivo').addEventListener('change', (e) => { appDB.objetivoCiclo = e.target.value; guardarBaseDeDatos(); });
     const selectCiclo = document.getElementById('select-ciclo'); const calendarioContainer = document.getElementById('calendario-container');
     
+    // ASIGNACIÓN GLOBAL SEGURO
     window.generarCalendario = function(tipoCiclo) {
         calendarioContainer.innerHTML = ''; const hoy = new Date(); hoy.setHours(0, 0, 0, 0); let fechaInicioIteracion, numSemanas = 0;
         if (tipoCiclo === 'micro') { fechaInicioIteracion = getMonday(hoy); numSemanas = 1; } 
@@ -384,9 +388,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             semanaHTML += `</div></div>`; calendarioContainer.innerHTML += semanaHTML;
         }
-        pintarDatosGuardados();
+        if(window.pintarDatosGuardados) window.pintarDatosGuardados();
     };
-    selectCiclo.addEventListener('change', (e) => generarCalendario(e.target.value));
+    
+    selectCiclo.addEventListener('change', (e) => window.generarCalendario(e.target.value));
 
     const selectBloque = document.getElementById('select-bloque'); const selectConcepto = document.getElementById('select-concepto');
     const selectGesto = document.getElementById('select-gesto'); const selectEncadenamiento = document.getElementById('select-encadenamiento'); const selectNaturaleza = document.getElementById('select-naturaleza'); const contenedorEncadenamiento = document.getElementById('encadenamiento-container');
@@ -419,6 +424,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-guardar-tarea').addEventListener('click', (e) => {
         e.preventDefault();
         if(!appDB.fechas[diaYsemanaActual]) { appDB.fechas[diaYsemanaActual] = { evento: "", contexto: { condicional: "", emocional: "", transversal: "" }, tareas: [] }; }
+        if(!appDB.fechas[diaYsemanaActual].tareas) appDB.fechas[diaYsemanaActual].tareas = [];
+
         appDB.fechas[diaYsemanaActual].evento = document.getElementById('select-evento-especial').value;
         const gesto = selectGesto.value; const bloqueValue = selectBloque.value; const naturaleza = selectNaturaleza.value;
         let duracion = parseInt(document.getElementById('input-duracion').value) || 0; let rpe = parseInt(document.getElementById('select-rpe').value) || 5; let unidadesCarga = duracion * rpe;
@@ -437,11 +444,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } else { mostrarAlerta("✅ Guardado", `Contexto actualizado.`, false); }
         const cond = document.getElementById('input-condicional').value; const emo = document.getElementById('input-emocional').value; const trans = document.getElementById('input-transversal').value;
         appDB.fechas[diaYsemanaActual].contexto.condicional = cond || ""; appDB.fechas[diaYsemanaActual].contexto.emocional = emo || ""; appDB.fechas[diaYsemanaActual].contexto.transversal = trans || "";
-        guardarBaseDeDatos(); pintarDatosGuardados(); cerrarModal(); 
+        
+        guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); cerrarModal(); 
     });
 
-    document.getElementById('btn-limpiar-dia').addEventListener('click', (e) => { e.preventDefault(); if(appDB.fechas[diaYsemanaActual]) { let tareasDelDia = appDB.fechas[diaYsemanaActual].tareas || []; tareasDelDia.forEach(t => { if(t.bloqueID && appDB.statsBloques[t.bloqueID]) appDB.statsBloques[t.bloqueID] = Math.max(0, appDB.statsBloques[t.bloqueID] - 1); if(t.gesto && appDB.statsGestos[t.gesto]) appDB.statsGestos[t.gesto] = Math.max(0, appDB.statsGestos[t.gesto] - 1); }); delete appDB.fechas[diaYsemanaActual]; guardarBaseDeDatos(); pintarDatosGuardados(); mostrarAlerta("🗑️ Día Limpiado", "Planificación eliminada.", false); } cerrarModal(); });
-    window.limpiarSemana = function(isoLunes) { if(confirm("¿Seguro que quieres borrar TODA la planificación de esta semana?")) { let fechaLunes = new Date(isoLunes + "T12:00:00"); for(let i=0; i<7; i++) { let fd = new Date(fechaLunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); if(appDB.fechas[iso]) { let tareas = appDB.fechas[iso].tareas || []; tareas.forEach(t => { if(t.bloqueID && appDB.statsBloques[t.bloqueID]) appDB.statsBloques[t.bloqueID] = Math.max(0, appDB.statsBloques[t.bloqueID] - 1); if(t.gesto && appDB.statsGestos[t.gesto]) appDB.statsGestos[t.gesto] = Math.max(0, appDB.statsGestos[t.gesto] - 1); }); delete appDB.fechas[iso]; } } guardarBaseDeDatos(); pintarDatosGuardados(); mostrarAlerta("🗑️ Semana Limpiada", "Toda la semana eliminada.", false); } };
+    document.getElementById('btn-limpiar-dia').addEventListener('click', (e) => { e.preventDefault(); if(appDB.fechas[diaYsemanaActual]) { let tareasDelDia = appDB.fechas[diaYsemanaActual].tareas || []; tareasDelDia.forEach(t => { if(t.bloqueID && appDB.statsBloques[t.bloqueID]) appDB.statsBloques[t.bloqueID] = Math.max(0, appDB.statsBloques[t.bloqueID] - 1); if(t.gesto && appDB.statsGestos[t.gesto]) appDB.statsGestos[t.gesto] = Math.max(0, appDB.statsGestos[t.gesto] - 1); }); delete appDB.fechas[diaYsemanaActual]; guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); mostrarAlerta("🗑️ Día Limpiado", "Planificación eliminada.", false); } cerrarModal(); });
+    window.limpiarSemana = function(isoLunes) { if(confirm("¿Seguro que quieres borrar TODA la planificación de esta semana?")) { let fechaLunes = new Date(isoLunes + "T12:00:00"); for(let i=0; i<7; i++) { let fd = new Date(fechaLunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); if(appDB.fechas[iso]) { let tareas = appDB.fechas[iso].tareas || []; tareas.forEach(t => { if(t.bloqueID && appDB.statsBloques[t.bloqueID]) appDB.statsBloques[t.bloqueID] = Math.max(0, appDB.statsBloques[t.bloqueID] - 1); if(t.gesto && appDB.statsGestos[t.gesto]) appDB.statsGestos[t.gesto] = Math.max(0, appDB.statsGestos[t.gesto] - 1); }); delete appDB.fechas[iso]; } } guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); mostrarAlerta("🗑️ Semana Limpiada", "Toda la semana eliminada.", false); } };
 
     function mostrarSmartCard(gestoOriginal, alternativaObj) { let botonesHTML = ''; alternativaObj.opciones.forEach(opc => { botonesHTML += `<button class="btn-alt" onclick="aplicarAlternativaAutomatica('${opc}')"><span> Sustituir por: </span> <b>${opc}</b></button>`; }); document.getElementById('smart-card-container').innerHTML = `<div class="smart-card"><div class="smart-card-header">⚠️ Alerta Metodológica</div><p>Límite superado para <b>${gestoOriginal}</b>.<br>${alternativaObj.msg}</p><div class="smart-btn-group">${botonesHTML}</div></div>`; document.getElementById('smart-card-container').classList.remove('hidden'); }
     window.aplicarAlternativaAutomatica = function(nuevoGesto) { 
@@ -451,117 +459,22 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('smart-card-container').classList.add('hidden'); 
         document.getElementById('btn-guardar-tarea').click(); 
     };
-    window.toggleTaskStatus = function(fechaISO, taskIndex, nuevoStatus) { appDB.fechas[fechaISO].tareas[taskIndex].status = nuevoStatus; if(nuevoStatus === 'done' && !appDB.fechas[fechaISO].tareas[taskIndex].calidad) { appDB.fechas[fechaISO].tareas[taskIndex].calidad = 2; } guardarBaseDeDatos(); pintarDatosGuardados(); renderizarGraficos(); };
-    window.setTaskQuality = function(fechaISO, taskIndex, calidad) { appDB.fechas[fechaISO].tareas[taskIndex].calidad = calidad; guardarBaseDeDatos(); pintarDatosGuardados(); };
+    window.toggleTaskStatus = function(fechaISO, taskIndex, nuevoStatus) { appDB.fechas[fechaISO].tareas[taskIndex].status = nuevoStatus; if(nuevoStatus === 'done' && !appDB.fechas[fechaISO].tareas[taskIndex].calidad) { appDB.fechas[fechaISO].tareas[taskIndex].calidad = 2; } guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); if(window.renderizarGraficos) window.renderizarGraficos(); };
+    window.setTaskQuality = function(fechaISO, taskIndex, calidad) { appDB.fechas[fechaISO].tareas[taskIndex].calidad = calidad; guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); };
 
-    function pintarDatosGuardados() {
-        document.querySelectorAll('.day-context-box').forEach(el => el.innerHTML = ''); document.querySelectorAll('.task-list').forEach(el => el.innerHTML = ''); document.querySelectorAll('.md-badge').forEach(el => el.remove());
-        let fechasPartidos = []; for (const [f, d] of Object.entries(appDB.fechas)) { if(d.evento === 'partido') fechasPartidos.push(new Date(f + "T12:00:00").getTime()); }
-
-        for (const [fechaISO, data] of Object.entries(appDB.fechas)) {
-            const contextBox = document.getElementById(`context-${fechaISO}`); const listBox = document.getElementById(`list-${fechaISO}`); const cardHeader = document.querySelector(`#card-${fechaISO} .day-header`);
-            if(!contextBox || !listBox || !cardHeader) continue;
-
-            if(fechasPartidos.length > 0 && data.evento !== 'partido') {
-                let currentT = new Date(fechaISO + "T12:00:00").getTime(); let closestMatch = fechasPartidos.reduce((prev, curr) => Math.abs(curr - currentT) < Math.abs(prev - currentT) ? curr : prev); let diffDays = Math.round((currentT - closestMatch) / (1000 * 3600 * 24));
-                if(diffDays >= -5 && diffDays <= 2) { let txtMD = diffDays > 0 ? `MD+${diffDays}` : `MD${diffDays}`; let colorClass = diffDays === -1 ? 'md-1' : (diffDays === -2 ? 'md-2' : ''); cardHeader.innerHTML += `<span class="md-badge ${colorClass}">${txtMD}</span>`; }
-            }
-
-            if(data.evento) { let evtHTML = ""; if(data.evento === 'descanso') evtHTML = `<span class="tag-evento evento-descanso">🌴 Día de Descanso</span>`; if(data.evento === 'partido') evtHTML = `<span class="tag-evento evento-partido">⚽ Día de Partido</span>`; if(data.evento === 'desplazamiento') evtHTML = `<span class="tag-evento evento-desplazamiento">🚌 Desplazamiento</span>`; listBox.innerHTML += evtHTML; }
-            let ctx = data.contexto || {}; let transHTML = ctx.transversal || ""; if(transHTML.includes("http")) { transHTML = `<a href="${transHTML}" target="_blank" style="color: inherit; text-decoration: underline;">🎥 Ver Video-Scouting</a>`; }
-            let htmlContexto = ""; if(ctx.condicional || ctx.emocional || ctx.transversal) { if(ctx.condicional) htmlContexto += `<span class="ctx-tag tag-condicional">⚡ ${ctx.condicional}</span>`; if(ctx.emocional) htmlContexto += `<span class="ctx-tag tag-emocional">🧠 ${ctx.emocional}</span>`; if(ctx.transversal) htmlContexto += `<span class="ctx-tag tag-transversal">📖 ${transHTML}</span>`; } else if (data.tareas && data.tareas.length > 0) { htmlContexto = `<span class="ctx-tag" style="background:#f0f0f5; color:#888; border:1px solid #ddd;">⚙️ Contexto no definido</span>`; }
-            contextBox.innerHTML = htmlContexto;
-
-            if(data.tareas) {
-                data.tareas.forEach((tarea, index) => {
-                    let colorClase = ""; let icono = "";
-                    if(tarea.bloqueID === 'tecnica_defensiva') { colorClase = 'tec-def'; icono = '🛡️'; } else if(tarea.bloqueID === 'tecnica_ofensiva') { colorClase = 'tec-ofe'; icono = '⚔️'; } else if(tarea.bloqueID === 'tactica_defensiva') { colorClase = 'tac-def'; icono = '🛑'; } else if(tarea.bloqueID === 'tactica_ofensiva') { colorClase = 'tac-ofe'; icono = '🔥'; }
-                    let natBadgeClass = tarea.naturaleza === 'analitica' ? 'nat-a' : (tarea.naturaleza === 'juego_real' ? 'nat-jr' : (tarea.naturaleza === 'semi_analitica' ? 'nat-sa' : 'nat-g')); let natText = tarea.naturaleza === 'analitica' ? '🧩 Analítica' : (tarea.naturaleza === 'juego_real' ? '⚔️ Juego Real' : (tarea.naturaleza === 'semi_analitica' ? '🌗 Semi-Analítica' : '🌐 Global')); let natHTML = `<span class="badge-nat ${natBadgeClass}">${natText}</span>`;
-                    let statusClass = tarea.status === 'done' ? 'task-done' : (tarea.status === 'missed' ? 'task-missed' : '');
-                    
-                    let infoCarga = (tarea.duracion && tarea.rpe) ? `<span style="font-size:0.7rem; color:#d32f2f; font-weight:900;">⚡ ${tarea.carga} UA</span>` : ''; 
-                    let viaSalidaHtml = tarea.viaSalida ? `<span style="font-size:0.65rem; background:#fff3e0; color:#e65100; padding:2px 5px; border-radius:4px; font-weight:bold; margin-left:5px;">➡️ Vía ${tarea.viaSalida}</span>` : '';
-                    let cadenaHTML = tarea.encadenado ? `<div class="task-chain">➔ ${tarea.encadenado}</div>` : ''; 
-                    let subTextoVisual = `<div style="display:flex; justify-content:space-between; align-items:center;"><span>${tarea.bloqueTexto.replace(icono, '').trim()}${viaSalidaHtml}</span> ${infoCarga}</div>`;
-                    
-                    let qualityHTML = '';
-                    if(tarea.status === 'done' && currentUser && currentUser.role === 'trainer') { let q = tarea.calidad || 2; qualityHTML = `<div class="quality-controls" style="display:flex; justify-content:space-between; align-items:center; width:100%; border-top: 1px dashed rgba(0,0,0,0.1); margin-top:5px; padding-top:5px;"><span style="font-size:0.7rem; color:#666; font-weight:bold;">Calidad:</span><div><button class="btn-q ${q===3?'active-q-bien':''}" onclick="setTaskQuality('${fechaISO}', ${index}, 3)">🟢</button><button class="btn-q ${q===2?'active-q-reg':''}" onclick="setTaskQuality('${fechaISO}', ${index}, 2)">🟡</button><button class="btn-q ${q===1?'active-q-mal':''}" onclick="setTaskQuality('${fechaISO}', ${index}, 1)">🔴</button></div></div>`; }
-                    
-                    let statusBtns = (currentUser && currentUser.role === 'trainer') ? `<div style="display:flex; gap:5px;"><button class="btn-status" onclick="toggleTaskStatus('${fechaISO}', ${index}, 'done')">✅</button><button class="btn-status" onclick="toggleTaskStatus('${fechaISO}', ${index}, 'missed')">❌</button></div>` : ``;
-
-                    listBox.innerHTML += `<div class="task-item ${colorClase} ${statusClass}"><div class="task-main"><span>${icono} ${tarea.gesto}</span> ${natHTML}</div><div class="task-sub">${subTextoVisual}</div>${cadenaHTML}<div class="task-status-bar">${statusBtns}</div>${qualityHTML}</div>`;
-                });
-            }
-        }
-        if(currentUser && currentUser.role === 'trainer') inicializarDragAndDrop();
-    }
-
-    const modal = document.getElementById('add-modal');
-    window.abrirModal = (idUnico, tituloFormateado) => { 
-        diaYsemanaActual = idUnico; 
-        document.getElementById('modal-day-title').innerText = `Añadir a ${tituloFormateado}`; 
-        let diaTieneDatos = false; 
-        if(appDB.fechas[idUnico]) { 
-            diaTieneDatos = true; 
-            if(appDB.fechas[idUnico].evento) {
-                document.getElementById('select-evento-especial').value = appDB.fechas[idUnico].evento;
-                if(document.getElementById('select-evento-especial').dataset.customized) document.getElementById('select-evento-especial').dispatchEvent(new Event('change'));
-            }
-            if(appDB.fechas[idUnico].contexto) { 
-                document.getElementById('input-condicional').value = appDB.fechas[idUnico].contexto.condicional || ""; 
-                document.getElementById('input-emocional').value = appDB.fechas[idUnico].contexto.emocional || ""; 
-                document.getElementById('input-transversal').value = appDB.fechas[idUnico].contexto.transversal || ""; 
-            } 
-        } 
-        if(diaTieneDatos) { document.getElementById('btn-limpiar-dia').classList.remove('hidden'); } else { document.getElementById('btn-limpiar-dia').classList.add('hidden'); } 
-        document.getElementById('input-duracion').value = ""; 
-        modal.classList.remove('hidden'); 
-    };
-
-    window.cerrarModal = () => { 
-        modal.classList.add('hidden'); 
-        document.getElementById('smart-card-container').classList.add('hidden'); 
-        document.getElementById('encadenamiento-container').classList.add('hidden'); 
-        document.getElementById('btn-limpiar-dia').classList.add('hidden'); 
-        
-        ['select-evento-especial', 'select-bloque', 'select-encadenamiento', 'select-naturaleza', 'select-concepto', 'select-gesto', 'select-via-salida'].forEach(id => {
-            let el = document.getElementById(id);
-            if(el) {
-                if(id === 'select-naturaleza') el.value = 'semi_analitica';
-                else el.value = "";
-                
-                if(id === 'select-concepto' || id === 'select-gesto') {
-                    el.innerHTML = `<option value="">${id === 'select-concepto' ? '2. Concepto...' : '3. Gesto Específico...'}</option>`;
-                    el.disabled = true;
-                }
-                if(id === 'select-encadenamiento') el.innerHTML = '<option value="">Sin encadenamiento</option>';
-                
-                if(el.dataset.customized) el.dispatchEvent(new Event('change'));
-            }
-        });
-        
-        document.getElementById('playbook-container').classList.add('hidden'); 
-        document.getElementById('input-condicional').value = ""; document.getElementById('input-emocional').value = ""; document.getElementById('input-transversal').value = ""; 
-    };
-    
-    document.getElementById('btn-close-modal').addEventListener('click', cerrarModal);
-    function mostrarAlerta(titulo, mensaje, esError, esWarningCognitivo = false) { const container = document.getElementById('alert-container'); let extraClass = esWarningCognitivo ? "warning-cog" : ""; let colorBorder = esError ? '#CB3524' : (esWarningCognitivo ? '#FF9800' : '#4CAF50'); if(esError && titulo.includes("MÉDICA")) extraClass = "critical-med"; container.innerHTML = `<div class="alert-box ${extraClass}" style="border-left-color: ${colorBorder}"><strong>${titulo}</strong><br>${mensaje}</div>`; setTimeout(() => container.innerHTML = '', 4500); }
-
+    // --- AUTOGENERADOR ---
     const autogenModal = document.getElementById('autogen-modal'); document.getElementById('btn-open-autogen').addEventListener('click', () => autogenModal.classList.remove('hidden')); document.getElementById('btn-close-autogen').addEventListener('click', () => autogenModal.classList.add('hidden')); function getLeastUsedTask(poolArray) { let minReps = Infinity; let bestTask = poolArray[0]; poolArray.forEach(task => { let reps = appDB.statsGestos[task.g] || 0; if(reps < minReps) { minReps = reps; bestTask = task; } }); return bestTask; }
-    
-    // IA Generador Sanitizado
     document.getElementById('btn-ejecutar-ia').addEventListener('click', () => {
         let diaPartido = parseInt(document.getElementById('ia-dia-partido').value); let perfilRival = document.getElementById('ia-perfil-rival').value; let trainingDaysNodes = document.querySelectorAll('input[name="ia-train-day"]:checked'); let trainingDays = Array.from(trainingDaysNodes).map(cb => parseInt(cb.value));
         if(trainingDays.length === 0) { alert("Selecciona al menos un día de entrenamiento."); return; } const hoy = new Date(); let lunes = getMonday(hoy);
         for(let i=0; i<7; i++) { let fd = new Date(lunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); if(appDB.fechas[iso]) { let tareas = appDB.fechas[iso].tareas || []; tareas.forEach(t => { if(t.bloqueID && appDB.statsBloques[t.bloqueID]) appDB.statsBloques[t.bloqueID] = Math.max(0, appDB.statsBloques[t.bloqueID]-1); if(t.gesto && appDB.statsGestos[t.gesto]) appDB.statsGestos[t.gesto] = Math.max(0, appDB.statsGestos[t.gesto]-1); }); delete appDB.fechas[iso]; } }
         const pools = { directo: { tecnica: [{b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Blocaje aéreo", c:2}, {b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Despeje de puños: dos puños", c:2}], tactica: [{b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Centros aéreos", c:3}, {b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Faltas colgadas", c:3}] }, combinativo: { tecnica: [{b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Pase raso", c:2}, {b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Perfilamiento + control orientado", c:2}], tactica: [{b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Salida de balón (Generar superioridad zona de inicio)", c:3, v:"corta"}, {b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Detectar hombre libre en zonas intermedias (creación)", c:3, v:"media"}] }, transiciones: { tecnica: [{b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"1vs1: Cruz", c:3}, {b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Posición de reducción de espacios", c:2}], tactica: [{b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Pase a la espalda de la defensa", c:3}, {b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Búsqueda de contraataque", c:3, v:"larga"}] }, bloque_bajo: { tecnica: [{b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Blocaje frontal raso", c:2}, {b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Desvío raso con una mano", c:2}], tactica: [{b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Tiros laterales", c:3}, {b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Remates", c:3}] }, bloque_medio: { tecnica: [{b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Pase largo con balón en movimiento", c:2}, {b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Pase raso", c:2}], tactica: [{b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Detectar hombre libre en zonas intermedias (creación)", c:3, v:"media"}, {b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Posicionamiento y bisectriz", c:2}] }, bloque_alto: { tecnica: [{b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Pase largo con control previo", c:3}, {b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Volea", c:2}], tactica: [{b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Salida de balón (Generar superioridad zona de inicio)", c:3, v:"larga"}, {b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Despejes orientados", c:3, v:"larga"}] }, abp: { tecnica: [{b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Blocaje aéreo", c:2}, {b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Desvío alto con una mano", c:3}], tactica: [{b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Córners", c:3}, {b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Faltas directas", c:3}] } };
         for(let i=0; i<7; i++) { let fd = new Date(lunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); let jsDay = fd.getDay() === 0 ? 7 : fd.getDay(); let MD = jsDay - diaPartido; appDB.fechas[iso] = { evento: "", contexto: { condicional:"", emocional:"", transversal:"" }, tareas: [] }; if(jsDay === diaPartido) { appDB.fechas[iso].evento = "partido"; appDB.fechas[iso].contexto.emocional = "Foco competitivo"; } else if (trainingDays.includes(jsDay)) { let tTec = getLeastUsedTask(pools[perfilRival].tecnica); let tTac = getLeastUsedTask(pools[perfilRival].tactica); if (MD === -1) { appDB.fechas[iso].contexto.condicional = "Activación Pre-Partido"; appDB.fechas[iso].tareas.push({bloqueID:"tecnica_ofensiva", bloqueTexto:"⚔️ Técnica Ofensiva", gesto:"Volea", encadenado:"", cognitiva:1, status:'planned', naturaleza: 'analitica', calidad:0, duracion: 10, rpe: 3, carga: 30}); appDB.statsBloques["tecnica_ofensiva"] = (appDB.statsBloques["tecnica_ofensiva"]||0)+1; appDB.statsGestos["Volea"] = (appDB.statsGestos["Volea"]||0)+1; } else if (Math.abs(MD) === 2 || MD === -2) { appDB.fechas[iso].contexto.condicional = "Velocidad de Reacción"; appDB.fechas[iso].tareas.push({bloqueID:"tecnica_defensiva", bloqueTexto:"🛡️ Técnica Defensiva", gesto:"Desvío a mano cambiada", encadenado:"", cognitiva:3, status:'planned', naturaleza: 'juego_real', calidad:0, duracion: 15, rpe: 8, carga: 120}); appDB.statsBloques["tecnica_defensiva"] = (appDB.statsBloques["tecnica_defensiva"]||0)+1; appDB.statsGestos["Desvío a mano cambiada"] = (appDB.statsGestos["Desvío a mano cambiada"]||0)+1; } else { appDB.fechas[iso].contexto.condicional = "Tensión / Espacios Reducidos"; appDB.fechas[iso].tareas.push({bloqueID:tTec.b, bloqueTexto:tTec.t, gesto:tTec.g, encadenado:"", cognitiva:tTec.c, status:'planned', naturaleza: 'semi_analitica', calidad:0, duracion: 20, rpe: 6, carga: 120}); appDB.fechas[iso].tareas.push({bloqueID:tTac.b, bloqueTexto:tTac.t, gesto:tTac.g, encadenado:"", cognitiva:tTac.c, status:'planned', naturaleza: 'global', calidad:0, duracion: 25, rpe: 7, carga: 175, viaSalida: tTac.v || null}); appDB.statsBloques[tTec.b] = (appDB.statsBloques[tTec.b]||0)+1; appDB.statsGestos[tTec.g] = (appDB.statsGestos[tTec.g]||0)+1; appDB.statsBloques[tTac.b] = (appDB.statsBloques[tTac.b]||0)+1; appDB.statsGestos[tTac.g] = (appDB.statsGestos[tTac.g]||0)+1; } } else { appDB.fechas[iso].evento = "descanso"; } }
-        guardarBaseDeDatos(); pintarDatosGuardados(); autogenModal.classList.add('hidden'); mostrarAlerta("🪄 IA Mágica", "Semana generada asegurando máxima variabilidad.", false);
+        guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); autogenModal.classList.add('hidden'); mostrarAlerta("🪄 IA Mágica", "Semana generada asegurando máxima variabilidad.", false);
     });
 
+    // --- IMPORTADOR ---
     const importModal = document.getElementById('import-text-modal'); document.getElementById('btn-open-import').addEventListener('click', () => importModal.classList.remove('hidden')); document.getElementById('btn-close-import').addEventListener('click', () => importModal.classList.add('hidden'));
-    
-    // Importador Sanitizado
     document.getElementById('btn-process-text').addEventListener('click', () => {
         const text = document.getElementById('ia-raw-text').value; if(!text) return; let lines = text.split('\n').map(l => l.trim()).filter(l => l !== ""); let currentWeekOffset = 0; let fechaBase = getPrimerLunesMeso(new Date()); let tareasAñadidas = 0;
         for (let i = 0; i < lines.length; i++) {
@@ -572,7 +485,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 let offsetDia = -1; diaTexto = celdas[0].toUpperCase(); if(diaTexto === 'L' || diaTexto === 'LUNES') offsetDia = 0; else if(diaTexto === 'M' || diaTexto === 'MARTES') offsetDia = 1; else if(diaTexto === 'X' || diaTexto === 'MIÉRCOLES' || diaTexto === 'MIERCOLES') offsetDia = 2; else if(diaTexto === 'J' || diaTexto === 'JUEVES') offsetDia = 3; else if(diaTexto === 'V' || diaTexto === 'VIERNES') offsetDia = 4; else if(diaTexto === 'S' || diaTexto === 'SÁBADO' || diaTexto === 'SABADO') offsetDia = 5; else if(diaTexto === 'D' || diaTexto === 'DOMINGO') offsetDia = 6;
                 if(offsetDia !== -1) {
                     let fechaDestino = new Date(fechaBase.getTime()); fechaDestino.setHours(12, 0, 0, 0); fechaDestino.setDate(fechaDestino.getDate() + (currentWeekOffset * 7) + offsetDia); let iso = toLocalISO(fechaDestino); 
+                    
                     if(!appDB.fechas[iso]) appDB.fechas[iso] = { evento: "", contexto: { condicional:"", emocional:"", transversal:"" }, tareas: [] };
+                    if(!appDB.fechas[iso].tareas) appDB.fechas[iso].tareas = []; 
+
                     let tecDef = celdas[1] ? celdas[1].trim() : ""; let tecOf = celdas[2] ? celdas[2].trim() : ""; let tacDef = celdas[3] ? celdas[3].trim() : ""; let tacOf = celdas[4] ? celdas[4].trim() : ""; let cond = celdas[5] ? celdas[5].trim() : ""; let emo = celdas[6] ? celdas[6].trim() : ""; let ignorar = ["TÉCNICA", "TECNICA", "TÁCTICA", "TACTICA", "CONDICIONAL", "EMOCIONAL", "DÍA", "DIA"];
                     if (tecDef && !ignorar.some(palabra => tecDef.toUpperCase().includes(palabra))) { appDB.fechas[iso].tareas.push({ bloqueID: "tecnica_defensiva", bloqueTexto: "🛡️ Téc. Defensiva", gesto: tecDef, encadenado: "", cognitiva: 2, status: 'planned', naturaleza: 'semi_analitica', calidad: 0, duracion: 15, rpe: 5, carga: 75 }); appDB.statsBloques["tecnica_defensiva"]=(appDB.statsBloques["tecnica_defensiva"]||0)+1; appDB.statsGestos[tecDef] = (appDB.statsGestos[tecDef] || 0) + 1; tareasAñadidas++;}
                     if (tecOf && !ignorar.some(palabra => tecOf.toUpperCase().includes(palabra))) { appDB.fechas[iso].tareas.push({ bloqueID: "tecnica_ofensiva", bloqueTexto: "⚔️ Téc. Ofensiva", gesto: tecOf, encadenado: "", cognitiva: 2, status: 'planned', naturaleza: 'semi_analitica', calidad: 0, duracion: 15, rpe: 5, carga: 75 }); appDB.statsBloques["tecnica_ofensiva"]=(appDB.statsBloques["tecnica_ofensiva"]||0)+1; appDB.statsGestos[tecOf] = (appDB.statsGestos[tecOf] || 0) + 1; tareasAñadidas++;}
@@ -582,10 +498,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         }
-        guardarBaseDeDatos(); pintarDatosGuardados(); importModal.classList.add('hidden'); document.getElementById('ia-raw-text').value = ""; mostrarAlerta("🤖 Traductor Completado", `Se han volcado ${tareasAñadidas} tareas al mes actual.`, false);
+        guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); importModal.classList.add('hidden'); document.getElementById('ia-raw-text').value = ""; mostrarAlerta("🤖 Traductor Completado", `Se han volcado ${tareasAñadidas} tareas al mes actual.`, false);
     });
 
-    // COMPARATIVA HISTÓRICA
     function poblarSelectoresComparativa() {
         let mesesUnicos = new Set(); Object.keys(appDB.fechas).forEach(iso => { mesesUnicos.add(iso.substring(0, 7)); }); let mesesArr = Array.from(mesesUnicos).sort(); let selA = document.getElementById('compare-mes-a'); let selB = document.getElementById('compare-mes-b'); selA.innerHTML = ''; selB.innerHTML = '';
         if(mesesArr.length === 0) { selA.innerHTML = '<option value="">Sin datos</option>'; selB.innerHTML = '<option value="">Sin datos</option>'; return; }
@@ -608,53 +523,6 @@ document.addEventListener('DOMContentLoaded', () => {
         actThermo('thermo-status-a', 'thermo-compare-a', statsA); actThermo('thermo-status-b', 'thermo-compare-b', statsB); document.getElementById('compare-results-container').classList.remove('hidden');
     });
 
-    // GRÁFICOS Y AUDITORÍA GENERAL
-    function renderizarGraficos() {
-        let stats = appDB.statsBloques;
-        if(adnChartInstance) adnChartInstance.destroy(); if(balanceChartInstance) balanceChartInstance.destroy(); if(realizadoChartInstance) realizadoChartInstance.destroy(); if(cargaChartInstance) cargaChartInstance.destroy(); if(matrizChartInstance) matrizChartInstance.destroy();
-
-        const ctxRadar = document.getElementById('adnChart').getContext('2d'); adnChartInstance = new Chart(ctxRadar, { type: 'radar', data: { labels: ['Téc. Defensiva', 'Téc. Ofensiva', 'Tác. Ofensiva', 'Tác. Defensiva'], datasets: [{ label: `Carga Metodológica`, data: [stats.tecnica_defensiva, stats.tecnica_ofensiva, stats.tactica_ofensiva, stats.tactica_defensiva], backgroundColor: 'rgba(203, 53, 36, 0.4)', borderColor: '#CB3524', pointBackgroundColor: '#003366' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { r: { beginAtZero: true } } } });
-        const ctxPie = document.getElementById('balanceChart').getContext('2d'); balanceChartInstance = new Chart(ctxPie, { type: 'doughnut', data: { labels: ['🛡️ Téc. Defensiva', '⚔️ Téc. Ofensiva', '🛑 Tác. Defensiva', '🔥 Tác. Ofensiva'], datasets: [{ data: [stats.tecnica_defensiva, stats.tecnica_ofensiva, stats.tactica_defensiva, stats.tactica_ofensiva], backgroundColor: ['#003366', '#00acc1', '#CB3524', '#ff9800'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } } });
-
-        let totalPlan = 0; let totalReal = 0; let cA = 0, cSA = 0, cG = 0, cJR = 0; let cargasSemanales = {}; let maxSemana = 1; let playbook = { corta: 0, media: 0, larga: 0, total: 0 }; let mData = { 'analitica': [0,0,0,0], 'semi_analitica': [0,0,0,0], 'global': [0,0,0,0], 'juego_real': [0,0,0,0] };
-        
-        for (const [f, data] of Object.entries(appDB.fechas)) {
-            let fechaDate = new Date(f + "T12:00:00"); let lunesBase = getPrimerLunesMeso(fechaDate); let numSemana = Math.floor(Math.floor((fechaDate - lunesBase) / (24 * 60 * 60 * 1000)) / 7) + 1;
-            if(!cargasSemanales[numSemana]) cargasSemanales[numSemana] = 0; if(numSemana > maxSemana) maxSemana = numSemana;
-            if(data.tareas) { data.tareas.forEach(t => { totalPlan++; if(t.carga) cargasSemanales[numSemana] += t.carga; if(t.status === 'done') totalReal++; if(t.naturaleza === 'analitica') cA++; if(t.naturaleza === 'semi_analitica') cSA++; if(t.naturaleza === 'global') cG++; if(t.naturaleza === 'juego_real') cJR++; if(t.naturaleza && mData[t.naturaleza]) { if(t.bloqueID === 'tecnica_defensiva') mData[t.naturaleza][0]++; if(t.bloqueID === 'tecnica_ofensiva') mData[t.naturaleza][1]++; if(t.bloqueID === 'tactica_defensiva') mData[t.naturaleza][2]++; if(t.bloqueID === 'tactica_ofensiva') mData[t.naturaleza][3]++; } if(t.bloqueID === 'tactica_ofensiva' && t.viaSalida) { if(t.viaSalida === 'corta') playbook.corta++; if(t.viaSalida === 'media') playbook.media++; if(t.viaSalida === 'larga') playbook.larga++; playbook.total++; } }); }
-        }
-        
-        const ctxBar = document.getElementById('realizadoChart').getContext('2d'); realizadoChartInstance = new Chart(ctxBar, { type: 'bar', data: { labels: ['Auditoría de Tareas'], datasets: [ { label: 'Planificadas', data: [totalPlan], backgroundColor: '#003366' }, { label: 'Realmente Ejecutadas', data: [totalReal], backgroundColor: '#4CAF50' } ] }, options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y' } });
-        let labelsCarga = []; let dataCarga = []; for(let i=1; i<=maxSemana; i++) { labelsCarga.push(`Micro ${i}`); dataCarga.push(cargasSemanales[i] || 0); }
-        const ctxCarga = document.getElementById('cargaChart').getContext('2d'); cargaChartInstance = new Chart(ctxCarga, { type: 'bar', data: { labels: labelsCarga, datasets: [ { label: 'Unidades de Carga (UA)', data: dataCarga, backgroundColor: '#FF9800', borderRadius: 8 } ] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } } });
-
-        const ctxMatriz = document.getElementById('matrizChart').getContext('2d'); matrizChartInstance = new Chart(ctxMatriz, { type: 'bar', data: { labels: ['🛡️ Téc Def', '⚔️ Téc Ofe', '🛑 Tác Def', '🔥 Tác Ofe'], datasets: [ { label: 'Analítica', data: [mData.analitica[0], mData.analitica[1], mData.analitica[2], mData.analitica[3]], backgroundColor: '#9E9E9E' }, { label: 'Semi-Analítica', data: [mData.semi_analitica[0], mData.semi_analitica[1], mData.semi_analitica[2], mData.semi_analitica[3]], backgroundColor: '#FF9800' }, { label: 'Global', data: [mData.global[0], mData.global[1], mData.global[2], mData.global[3]], backgroundColor: '#2196f3' }, { label: 'Juego Real', data: [mData.juego_real[0], mData.juego_real[1], mData.juego_real[2], mData.juego_real[3]], backgroundColor: '#F44336' } ] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } } });
-
-        let pCorta = playbook.total > 0 ? Math.round((playbook.corta / playbook.total) * 100) : 0; let pMedia = playbook.total > 0 ? Math.round((playbook.media / playbook.total) * 100) : 0; let pLarga = playbook.total > 0 ? Math.round((playbook.larga / playbook.total) * 100) : 0;
-        document.getElementById('playbook-corta-pct').innerText = pCorta + '%'; document.getElementById('playbook-corta-bar').style.width = pCorta + '%'; document.getElementById('playbook-media-pct').innerText = pMedia + '%'; document.getElementById('playbook-media-bar').style.width = pMedia + '%'; document.getElementById('playbook-larga-pct').innerText = pLarga + '%'; document.getElementById('playbook-larga-bar').style.width = pLarga + '%';
-
-        let ratioOfensivo = totalPlan > 0 ? ((stats.tecnica_ofensiva + stats.tactica_ofensiva) / totalPlan) * 100 : 0; let ratioDefensivo = totalPlan > 0 ? ((stats.tecnica_defensiva + stats.tactica_defensiva) / totalPlan) * 100 : 0; let ratioTactico = totalPlan > 0 ? ((stats.tactica_defensiva + stats.tactica_ofensiva) / totalPlan) * 100 : 0; let ratioTecnico = totalPlan > 0 ? ((stats.tecnica_defensiva + stats.tecnica_ofensiva) / totalPlan) * 100 : 0;
-        let objTitle = document.getElementById('obj-title'); let objDesc = document.getElementById('obj-desc'); let objContainer = document.getElementById('objetivo-status-container');
-        if (totalPlan === 0) { objTitle.innerText = "Esperando tareas..."; objDesc.innerText = "Añade planificación."; objContainer.style.borderLeftColor = "#ccc"; } 
-        else {
-            let cumplido = false; let mensaje = "";
-            if (appDB.objetivoCiclo === "equilibrio") { cumplido = (ratioOfensivo >= 35 && ratioOfensivo <= 65); mensaje = `Equilibrio: Ofe ${ratioOfensivo.toFixed(1)}% / Def ${ratioDefensivo.toFixed(1)}%.`; } else if (appDB.objetivoCiclo === "ofensivo" || appDB.objetivoCiclo === "transiciones") { cumplido = (ratioOfensivo >= 40); mensaje = `Ofensivo: ${ratioOfensivo.toFixed(1)}% (Mín: 40%).`; } else if (appDB.objetivoCiclo === "defensivo" || appDB.objetivoCiclo === "espacios") { cumplido = (ratioDefensivo >= 55); mensaje = `Defensivo: ${ratioDefensivo.toFixed(1)}% (Mín: 55%).`; } else if (appDB.objetivoCiclo === "tactico" || appDB.objetivoCiclo === "juego_aereo") { cumplido = (ratioTactico >= 45); mensaje = `Táctico: ${ratioTactico.toFixed(1)}% (Mín: 45%).`; } else if (appDB.objetivoCiclo === "reaccion") { cumplido = (ratioTecnico >= 50); mensaje = `Técnico: ${ratioTecnico.toFixed(1)}% (Mín: 50%).`; }
-            objTitle.innerText = cumplido ? "✅ Objetivo en Vías" : "⚠️ Objetivo en Riesgo"; objTitle.style.color = cumplido ? "#2e7d32" : "#c62828"; objContainer.style.borderLeftColor = cumplido ? "#4CAF50" : "#F44336"; objDesc.innerText = mensaje;
-        }
-
-        let totalTareasCog = 0; let totalCog = 0; for (const [f, data] of Object.entries(appDB.fechas)) { if(data.tareas) { data.tareas.forEach(t => { if(t.status !== 'missed') { totalTareasCog++; totalCog += (t.cognitiva || 2); } }); } }
-        let avgCog = totalTareasCog > 0 ? (totalCog / totalTareasCog) : 0; let percentThermo = (avgCog / 3) * 100;
-        document.getElementById('thermo-bar').style.width = `${percentThermo}%`; document.getElementById('thermo-bar').className = 'thermo-fill ' + (avgCog < 1.6 ? 'thermo-low' : (avgCog < 2.5 ? 'thermo-med' : 'thermo-high')); document.getElementById('thermo-status').innerText = avgCog === 0 ? "Sin datos" : (avgCog < 1.6 ? "Baja" : (avgCog < 2.5 ? "Media" : "Alta"));
-
-        let totalEsp = cA + cSA + cG + cJR;
-        if(totalEsp > 0) {
-            let pA = (cA/totalEsp)*100; let pSA = (cSA/totalEsp)*100; let pG = (cG/totalEsp)*100; let pJR = (cJR/totalEsp)*100;
-            document.getElementById('especificidad-bar').innerHTML = `<div style="width:${pA}%; background:#9E9E9E;" title="Analítica"></div><div style="width:${pSA}%; background:#FF9800;" title="Semi-Analítica"></div><div style="width:${pG}%; background:#2196f3;" title="Global"></div><div style="width:${pJR}%; background:#F44336;" title="Juego Real"></div>`; document.getElementById('especificidad-text').innerHTML = `<b>A:</b> ${pA.toFixed(0)}% | <b>SA:</b> ${pSA.toFixed(0)}% | <b>G:</b> ${pG.toFixed(0)}% | <b>JR:</b> ${pJR.toFixed(0)}%`;
-            document.getElementById('alerta-md2').innerHTML = pA > 50 ? `<div style="background:#ffebee; color:#c62828; padding:8px; border-radius:6px; font-size:0.75rem; border-left:3px solid #c62828;">⚠️ Exceso tareas Analíticas (${pA.toFixed(0)}%).</div>` : "";
-        } else { document.getElementById('especificidad-bar').innerHTML = `<div style="width:100%; background:#eee;"></div>`; document.getElementById('especificidad-text').innerHTML = "Sin datos."; document.getElementById('alerta-md2').innerHTML = ""; }
-    }
-
-    // EXPORTACIONES A PDF / PPTX
     document.getElementById('btn-export-calendario').addEventListener('click', () => { html2pdf().set({ margin: 5, filename: `Planificacion.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } }).from(document.getElementById('calendario-container')).save(); });
     document.getElementById('btn-export-dashboard').addEventListener('click', () => { html2pdf().set({ margin: 10, filename: `Graficos.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } }).from(document.getElementById('pdf-dashboard')).save(); });
     document.getElementById('btn-memoria-anual').addEventListener('click', () => {
@@ -667,7 +535,6 @@ document.addEventListener('DOMContentLoaded', () => {
         html2pdf().set({ margin: 0, filename: 'Memoria.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(document.getElementById('informe-oficial-template')).save();
     });
 
-    // --- GENERADOR PPTX ---
     document.getElementById('btn-export-pptx').addEventListener('click', () => {
         let pptx = new PptxGenJS(); 
         pptx.layout = 'LAYOUT_16x9'; 
@@ -733,24 +600,18 @@ document.addEventListener('DOMContentLoaded', () => {
         pptx.writeFile({ fileName: `ADN_Keeper_${tituloCiclo.replace(/\s/g, '_')}.pptx` });
     });
 
-    // ==========================================
-    // SISTEMA DE DESPLEGABLES PERSONALIZADOS
-    // ==========================================
     function setupCustomSelects() {
         document.querySelectorAll('select.custom-select-auto').forEach(select => {
             if (select.dataset.customized) return;
             select.dataset.customized = true;
 
-            // Ocultar nativo
             select.style.display = 'none';
 
-            // Wrapper
             const wrapper = document.createElement('div');
             wrapper.className = 'custom-select-wrapper';
             select.parentNode.insertBefore(wrapper, select);
             wrapper.appendChild(select);
 
-            // Trigger
             const trigger = document.createElement('div');
             trigger.className = 'custom-select-trigger glass-input';
             const triggerText = document.createElement('span');
@@ -763,7 +624,6 @@ document.addEventListener('DOMContentLoaded', () => {
             trigger.appendChild(arrow);
             wrapper.appendChild(trigger);
 
-            // Options container
             const optionsContainer = document.createElement('div');
             optionsContainer.className = 'custom-select-options';
             wrapper.appendChild(optionsContainer);
@@ -782,7 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (option.disabled) return;
                         
                         select.selectedIndex = index;
-                        select.value = option.value; // Forzado absoluto del valor
+                        select.value = option.value; 
                         triggerText.textContent = option.text;
                         
                         wrapper.classList.remove('open');
@@ -826,45 +686,86 @@ document.addEventListener('DOMContentLoaded', () => {
 
 });
 
-// --- RENDERIZADO DEL MACROCICLO GANTT ---
-function renderMacrociclo() {
-    const container = document.getElementById('gantt-container'); container.innerHTML = '';
-    const mesesNombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-    let hoy = new Date(); let startYear = hoy.getMonth() >= 6 ? hoy.getFullYear() : hoy.getFullYear() - 1; let sequence = [7,8,9,10,11,0,1,2,3,4,5]; 
-    sequence.forEach(monthIndex => {
-        let actualYear = monthIndex >= 7 ? startYear : startYear + 1; let primerDiaMes = new Date(actualYear, monthIndex, 1);
-        let monthDiv = document.createElement('div'); monthDiv.className = 'gantt-month'; let htmlSemanas = `<div class="gantt-month-header">${mesesNombres[monthIndex]} ${actualYear}</div><div class="gantt-weeks">`;
-        let currentLunes = getPrimerLunesMeso(primerDiaMes); let ultimoLunes = getUltimoLunesMeso(new Date(actualYear, monthIndex + 1, 0));
-        let numSemanas = Math.round((ultimoLunes - currentLunes) / (7 * 24 * 60 * 60 * 1000)) + 1;
-        for(let s = 0; s < numSemanas; s++) {
-            let fechaSemana = new Date(currentLunes); fechaSemana.setDate(fechaSemana.getDate() + (s * 7)); let isoLunes = toLocalISO(fechaSemana);
-            let claseFase = 'phase-comp'; if(monthIndex === 7) claseFase = 'phase-pre'; if(monthIndex === 11 && s > 2) claseFase = 'phase-break'; if(monthIndex === 5 && s > 1) claseFase = 'phase-break'; 
-            let numTareas = 0; for(let i=0; i<7; i++) { let d = new Date(fechaSemana); d.setDate(d.getDate()+i); let iso = toLocalISO(d); if(appDB.fechas[iso] && appDB.fechas[iso].tareas) numTareas += appDB.fechas[iso].tareas.length; }
-            let heightBar = numTareas === 0 ? 5 : Math.min(100, (numTareas * 10));
-            htmlSemanas += `<div class="gantt-week ${claseFase}" title="Ver Microciclo"><div class="gantt-tooltip">Micro ${fechaSemana.getDate()}/${fechaSemana.getMonth()+1}<br>${numTareas} Tareas</div><div class="gantt-bar" style="height: ${heightBar}px;"></div></div>`;
+window.pintarDatosGuardados = function() {
+    document.querySelectorAll('.day-context-box').forEach(el => el.innerHTML = ''); 
+    document.querySelectorAll('.task-list').forEach(el => el.innerHTML = ''); 
+    document.querySelectorAll('.md-badge').forEach(el => el.remove());
+    
+    let fechasPartidos = []; 
+    for (const [f, d] of Object.entries(appDB.fechas)) { if(d.evento === 'partido') fechasPartidos.push(new Date(f + "T12:00:00").getTime()); }
+
+    for (const [fechaISO, data] of Object.entries(appDB.fechas)) {
+        const contextBox = document.getElementById(`context-${fechaISO}`); const listBox = document.getElementById(`list-${fechaISO}`); const cardHeader = document.querySelector(`#card-${fechaISO} .day-header`);
+        if(!contextBox || !listBox || !cardHeader) continue;
+
+        if(fechasPartidos.length > 0 && data.evento !== 'partido') {
+            let currentT = new Date(fechaISO + "T12:00:00").getTime(); let closestMatch = fechasPartidos.reduce((prev, curr) => Math.abs(curr - currentT) < Math.abs(prev - currentT) ? curr : prev); let diffDays = Math.round((currentT - closestMatch) / (1000 * 3600 * 24));
+            if(diffDays >= -5 && diffDays <= 2) { let txtMD = diffDays > 0 ? `MD+${diffDays}` : `MD${diffDays}`; let colorClass = diffDays === -1 ? 'md-1' : (diffDays === -2 ? 'md-2' : ''); cardHeader.innerHTML += `<span class="md-badge ${colorClass}">${txtMD}</span>`; }
         }
-        htmlSemanas += `</div>`; monthDiv.innerHTML = htmlSemanas; container.appendChild(monthDiv);
-    });
-}
 
-// FUNCIONES GLOBALES
-function inicializarDragAndDrop() {
-    document.querySelectorAll('.task-list').forEach(list => {
-        new Sortable(list, { group: 'tareas-semanales', animation: 150, ghostClass: 'sortable-ghost', dragClass: 'sortable-drag',
-            onEnd: function (evt) {
-                const fromDateStr = evt.from.id.replace('list-', ''); const toDateStr = evt.to.id.replace('list-', ''); const oldIndex = evt.oldIndex; const newIndex = evt.newIndex;
-                if (fromDateStr === toDateStr && oldIndex === newIndex) return;
-                const tareaMovida = appDB.fechas[fromDateStr].tareas.splice(oldIndex, 1)[0];
-                if (!appDB.fechas[toDateStr]) { appDB.fechas[toDateStr] = { evento: "", contexto: { condicional: "", emocional: "", transversal: "" }, tareas: [] }; }
-                let fechaDestinoObj = new Date(toDateStr + "T12:00:00"); fechaDestinoObj.setDate(fechaDestinoObj.getDate() + 1); let isMD1 = (appDB.fechas[toLocalISO(fechaDestinoObj)] && appDB.fechas[toLocalISO(fechaDestinoObj)].evento === 'partido');
-                if (isMD1 && (tareaMovida.gesto.includes("1vs1") || tareaMovida.gesto.includes("aéreo") || tareaMovida.gesto.includes("Desvío"))) { appDB.fechas[fromDateStr].tareas.splice(oldIndex, 0, tareaMovida); setTimeout(() => location.reload(), 2500); alert(`🚨 ALERTA (MD-1)\nNo puedes mover "${tareaMovida.gesto}" a un día pre-partido.`); return; }
-                appDB.fechas[toDateStr].tareas.splice(newIndex, 0, tareaMovida); guardarBaseDeDatos();
-            }
-        });
-    });
-}
+        if(data.evento) { let evtHTML = ""; if(data.evento === 'descanso') evtHTML = `<span class="tag-evento evento-descanso">🌴 Día de Descanso</span>`; if(data.evento === 'partido') evtHTML = `<span class="tag-evento evento-partido">⚽ Día de Partido</span>`; if(data.evento === 'desplazamiento') evtHTML = `<span class="tag-evento evento-desplazamiento">🚌 Desplazamiento</span>`; listBox.innerHTML += evtHTML; }
+        let ctx = data.contexto || {}; let transHTML = ctx.transversal || ""; if(transHTML.includes("http")) { transHTML = `<a href="${transHTML}" target="_blank" style="color: inherit; text-decoration: underline;">🎥 Ver Video-Scouting</a>`; }
+        let htmlContexto = ""; if(ctx.condicional || ctx.emocional || ctx.transversal) { if(ctx.condicional) htmlContexto += `<span class="ctx-tag tag-condicional">⚡ ${ctx.condicional}</span>`; if(ctx.emocional) htmlContexto += `<span class="ctx-tag tag-emocional">🧠 ${ctx.emocional}</span>`; if(ctx.transversal) htmlContexto += `<span class="ctx-tag tag-transversal">📖 ${transHTML}</span>`; } else if (data.tareas && data.tareas.length > 0) { htmlContexto = `<span class="ctx-tag" style="background:#f0f0f5; color:#888; border:1px solid #ddd;">⚙️ Contexto no definido</span>`; }
+        contextBox.innerHTML = htmlContexto;
 
-let plantillasGuardadas = JSON.parse(localStorage.getItem('atleti_templates')) || {};
-window.abrirModalPlantilla = function(isoLunes) { document.getElementById('template-iso-lunes').value = isoLunes; document.getElementById('input-template-name').value = ""; document.getElementById('template-modal').classList.remove('hidden'); };
-window.cargarPlantillaPrompt = function(isoLunesDestino) { let nombres = Object.keys(plantillasGuardadas); if(nombres.length === 0) return alert("Sin plantillas."); let msj = "NÚMERO de plantilla:\n"; nombres.forEach((n, i) => msj += `${i+1}. ${n}\n`); let seleccion = prompt(msj); if(seleccion && !isNaN(seleccion) && seleccion > 0 && seleccion <= nombres.length) { let nombreElegido = nombres[seleccion-1]; let semanaData = plantillasGuardadas[nombreElegido]; let fecha = new Date(isoLunesDestino + "T12:00:00"); for(let i=0; i<7; i++) { let currentISO = toLocalISO(fecha); if(semanaData[i]) { appDB.fechas[currentISO] = JSON.parse(JSON.stringify(semanaData[i])); if(appDB.fechas[currentISO].tareas) { appDB.fechas[currentISO].tareas.forEach(t => { appDB.statsBloques[t.bloqueID] = (appDB.statsBloques[t.bloqueID] || 0) + 1; appDB.statsGestos[t.gesto] = (appDB.statsGestos[t.gesto] || 0) + 1; }); } } fecha.setDate(fecha.getDate() + 1); } guardarBaseDeDatos(); location.reload(); } };
-document.getElementById('btn-confirm-save-template').addEventListener('click', () => { let isoLunes = document.getElementById('template-iso-lunes').value; let nombre = document.getElementById('input-template-name').value; if(!nombre) return alert("Ponle nombre"); let semanaData = []; let fecha = new Date(isoLunes + "T12:00:00"); for(let i=0; i<7; i++) { let currentISO = toLocalISO(fecha); semanaData.push(appDB.fechas[currentISO] ? JSON.parse(JSON.stringify(appDB.fechas[currentISO])) : null); fecha.setDate(fecha.getDate() + 1); } plantillasGuardadas[nombre] = semanaData; localStorage.setItem('atleti_templates', JSON.stringify(plantillasGuardadas)); document.getElementById('template-modal').classList.add('hidden'); alert("Guardada"); });
+        if(data.tareas) {
+            data.tareas.forEach((tarea, index) => {
+                let colorClase = ""; let icono = "";
+                if(tarea.bloqueID === 'tecnica_defensiva') { colorClase = 'tec-def'; icono = '🛡️'; } else if(tarea.bloqueID === 'tecnica_ofensiva') { colorClase = 'tec-ofe'; icono = '⚔️'; } else if(tarea.bloqueID === 'tactica_defensiva') { colorClase = 'tac-def'; icono = '🛑'; } else if(tarea.bloqueID === 'tactica_ofensiva') { colorClase = 'tac-ofe'; icono = '🔥'; }
+                let natBadgeClass = tarea.naturaleza === 'analitica' ? 'nat-a' : (tarea.naturaleza === 'juego_real' ? 'nat-jr' : (tarea.naturaleza === 'semi_analitica' ? 'nat-sa' : 'nat-g')); let natText = tarea.naturaleza === 'analitica' ? '🧩 Analítica' : (tarea.naturaleza === 'juego_real' ? '⚔️ Juego Real' : (tarea.naturaleza === 'semi_analitica' ? '🌗 Semi-Analítica' : '🌐 Global')); let natHTML = `<span class="badge-nat ${natBadgeClass}">${natText}</span>`;
+                let statusClass = tarea.status === 'done' ? 'task-done' : (tarea.status === 'missed' ? 'task-missed' : '');
+                
+                let infoCarga = (tarea.duracion && tarea.rpe) ? `<span style="font-size:0.7rem; color:#d32f2f; font-weight:900;">⚡ ${tarea.carga} UA</span>` : ''; 
+                let viaSalidaHtml = tarea.viaSalida ? `<span style="font-size:0.65rem; background:#fff3e0; color:#e65100; padding:2px 5px; border-radius:4px; font-weight:bold; margin-left:5px;">➡️ Vía ${tarea.viaSalida}</span>` : '';
+                let cadenaHTML = tarea.encadenado ? `<div class="task-chain">➔ ${tarea.encadenado}</div>` : ''; 
+                let subTextoVisual = `<div style="display:flex; justify-content:space-between; align-items:center;"><span>${tarea.bloqueTexto.replace(icono, '').trim()}${viaSalidaHtml}</span> ${infoCarga}</div>`;
+                
+                let qualityHTML = '';
+                if(tarea.status === 'done' && currentUser && currentUser.role === 'trainer') { let q = tarea.calidad || 2; qualityHTML = `<div class="quality-controls" style="display:flex; justify-content:space-between; align-items:center; width:100%; border-top: 1px dashed rgba(0,0,0,0.1); margin-top:5px; padding-top:5px;"><span style="font-size:0.7rem; color:#666; font-weight:bold;">Calidad:</span><div><button class="btn-q ${q===3?'active-q-bien':''}" onclick="setTaskQuality('${fechaISO}', ${index}, 3)">🟢</button><button class="btn-q ${q===2?'active-q-reg':''}" onclick="setTaskQuality('${fechaISO}', ${index}, 2)">🟡</button><button class="btn-q ${q===1?'active-q-mal':''}" onclick="setTaskQuality('${fechaISO}', ${index}, 1)">🔴</button></div></div>`; }
+                
+                let statusBtns = (currentUser && currentUser.role === 'trainer') ? `<div style="display:flex; gap:5px;"><button class="btn-status" onclick="toggleTaskStatus('${fechaISO}', ${index}, 'done')">✅</button><button class="btn-status" onclick="toggleTaskStatus('${fechaISO}', ${index}, 'missed')">❌</button></div>` : ``;
+
+                listBox.innerHTML += `<div class="task-item ${colorClase} ${statusClass}"><div class="task-main"><span>${icono} ${tarea.gesto}</span> ${natHTML}</div><div class="task-sub">${subTextoVisual}</div>${cadenaHTML}<div class="task-status-bar">${statusBtns}</div>${qualityHTML}</div>`;
+            });
+        }
+    }
+    if(currentUser && currentUser.role === 'trainer') inicializarDragAndDrop();
+};
+
+window.renderizarGraficos = function() {
+    let stats = appDB.statsBloques;
+    if(adnChartInstance) adnChartInstance.destroy(); if(balanceChartInstance) balanceChartInstance.destroy(); if(realizadoChartInstance) realizadoChartInstance.destroy(); if(cargaChartInstance) cargaChartInstance.destroy(); if(matrizChartInstance) matrizChartInstance.destroy();
+
+    const ctxRadar = document.getElementById('adnChart').getContext('2d'); adnChartInstance = new Chart(ctxRadar, { type: 'radar', data: { labels: ['Téc. Defensiva', 'Téc. Ofensiva', 'Tác. Ofensiva', 'Tác. Defensiva'], datasets: [{ label: `Carga Metodológica`, data: [stats.tecnica_defensiva, stats.tecnica_ofensiva, stats.tactica_ofensiva, stats.tactica_defensiva], backgroundColor: 'rgba(203, 53, 36, 0.4)', borderColor: '#CB3524', pointBackgroundColor: '#003366' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { r: { beginAtZero: true } } } });
+    const ctxPie = document.getElementById('balanceChart').getContext('2d'); balanceChartInstance = new Chart(ctxPie, { type: 'doughnut', data: { labels: ['🛡️ Téc. Defensiva', '⚔️ Téc. Ofensiva', '🛑 Tác. Defensiva', '🔥 Tác. Ofensiva'], datasets: [{ data: [stats.tecnica_defensiva, stats.tecnica_ofensiva, stats.tactica_defensiva, stats.tactica_ofensiva], backgroundColor: ['#003366', '#00acc1', '#CB3524', '#ff9800'] }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } } });
+
+    let totalPlan = 0; let totalReal = 0; let cA = 0, cSA = 0, cG = 0, cJR = 0; let cargasSemanales = {}; let maxSemana = 1; let playbook = { corta: 0, media: 0, larga: 0, total: 0 }; let mData = { 'analitica': [0,0,0,0], 'semi_analitica': [0,0,0,0], 'global': [0,0,0,0], 'juego_real': [0,0,0,0] };
+    
+    for (const [f, data] of Object.entries(appDB.fechas)) {
+        let fechaDate = new Date(f + "T12:00:00"); let lunesBase = getPrimerLunesMeso(fechaDate); let numSemana = Math.floor(Math.floor((fechaDate - lunesBase) / (24 * 60 * 60 * 1000)) / 7) + 1;
+        if(!cargasSemanales[numSemana]) cargasSemanales[numSemana] = 0; if(numSemana > maxSemana) maxSemana = numSemana;
+        if(data.tareas) { data.tareas.forEach(t => { totalPlan++; if(t.carga) cargasSemanales[numSemana] += t.carga; if(t.status === 'done') totalReal++; if(t.naturaleza === 'analitica') cA++; if(t.naturaleza === 'semi_analitica') cSA++; if(t.naturaleza === 'global') cG++; if(t.naturaleza === 'juego_real') cJR++; if(t.naturaleza && mData[t.naturaleza]) { if(t.bloqueID === 'tecnica_defensiva') mData[t.naturaleza][0]++; if(t.bloqueID === 'tecnica_ofensiva') mData[t.naturaleza][1]++; if(t.bloqueID === 'tactica_defensiva') mData[t.naturaleza][2]++; if(t.bloqueID === 'tactica_ofensiva') mData[t.naturaleza][3]++; } if(t.bloqueID === 'tactica_ofensiva' && t.viaSalida) { if(t.viaSalida === 'corta') playbook.corta++; if(t.viaSalida === 'media') playbook.media++; if(t.viaSalida === 'larga') playbook.larga++; playbook.total++; } }); }
+    }
+    
+    const ctxBar = document.getElementById('realizadoChart').getContext('2d'); realizadoChartInstance = new Chart(ctxBar, { type: 'bar', data: { labels: ['Auditoría de Tareas'], datasets: [ { label: 'Planificadas', data: [totalPlan], backgroundColor: '#003366' }, { label: 'Realmente Ejecutadas', data: [totalReal], backgroundColor: '#4CAF50' } ] }, options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y' } });
+    let labelsCarga = []; let dataCarga = []; for(let i=1; i<=maxSemana; i++) { labelsCarga.push(`Micro ${i}`); dataCarga.push(cargasSemanales[i] || 0); }
+    const ctxCarga = document.getElementById('cargaChart').getContext('2d'); cargaChartInstance = new Chart(ctxCarga, { type: 'bar', data: { labels: labelsCarga, datasets: [ { label: 'Unidades de Carga (UA)', data: dataCarga, backgroundColor: '#FF9800', borderRadius: 8 } ] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } } });
+
+    const ctxMatriz = document.getElementById('matrizChart').getContext('2d'); matrizChartInstance = new Chart(ctxMatriz, { type: 'bar', data: { labels: ['🛡️ Téc Def', '⚔️ Téc Ofe', '🛑 Tác Def', '🔥 Tác Ofe'], datasets: [ { label: 'Analítica', data: [mData.analitica[0], mData.analitica[1], mData.analitica[2], mData.analitica[3]], backgroundColor: '#9E9E9E' }, { label: 'Semi-Analítica', data: [mData.semi_analitica[0], mData.semi_analitica[1], mData.semi_analitica[2], mData.semi_analitica[3]], backgroundColor: '#FF9800' }, { label: 'Global', data: [mData.global[0], mData.global[1], mData.global[2], mData.global[3]], backgroundColor: '#2196f3' }, { label: 'Juego Real', data: [mData.juego_real[0], mData.juego_real[1], mData.juego_real[2], mData.juego_real[3]], backgroundColor: '#F44336' } ] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } } });
+
+    let pCorta = playbook.total > 0 ? Math.round((playbook.corta / playbook.total) * 100) : 0; let pMedia = playbook.total > 0 ? Math.round((playbook.media / playbook.total) * 100) : 0; let pLarga = playbook.total > 0 ? Math.round((playbook.larga / playbook.total) * 100) : 0;
+    document.getElementById('playbook-corta-pct').innerText = pCorta + '%'; document.getElementById('playbook-corta-bar').style.width = pCorta + '%'; document.getElementById('playbook-media-pct').innerText = pMedia + '%'; document.getElementById('playbook-media-bar').style.width = pMedia + '%'; document.getElementById('playbook-larga-pct').innerText = pLarga + '%'; document.getElementById('playbook-larga-bar').style.width = pLarga + '%';
+
+    let ratioOfensivo = totalPlan > 0 ? ((stats.tecnica_ofensiva + stats.tactica_ofensiva) / totalPlan) * 100 : 0; let ratioDefensivo = totalPlan > 0 ? ((stats.tecnica_defensiva + stats.tactica_defensiva) / totalPlan) * 100 : 0; let ratioTactico = totalPlan > 0 ? ((stats.tactica_defensiva + stats.tactica_ofensiva) / totalPlan) * 100 : 0; let ratioTecnico = totalPlan > 0 ? ((stats.tecnica_defensiva + stats.tecnica_ofensiva) / totalPlan) * 100 : 0;
+    let objTitle = document.getElementById('obj-title'); let objDesc = document.getElementById('obj-desc'); let objContainer = document.getElementById('objetivo-status-container');
+    if (totalPlan === 0) { objTitle.innerText = "Esperando tareas..."; objDesc.innerText = "Añade planificación."; objContainer.style.borderLeftColor = "#ccc"; } 
+    else {
+        let cumplido = false; let mensaje = "";
+        if (appDB.objetivoCiclo === "equilibrio") { cumplido = (ratioOfensivo >= 35 && ratioOfensivo <= 65); mensaje = `Equilibrio: Ofe ${ratioOfensivo.toFixed(1)}% / Def ${ratioDefensivo.toFixed(1)}%.`; } else if (appDB.objetivoCiclo === "ofensivo" || appDB.objetivoCiclo === "transiciones") { cumplido = (ratioOfensivo >= 40); mensaje = `Ofensivo: ${ratioOfensivo.toFixed(1)}% (Mín: 40%).`; } else if (appDB.objetivoCiclo === "defensivo" || appDB.objetivoCiclo === "espacios") { cumplido = (ratioDefensivo >= 55); mensaje = `Defensivo: ${ratioDefensivo.toFixed(1)}% (Mín: 55%).`; } else if (appDB.objetivoCiclo === "tactico" || appDB.objetivoCiclo === "juego_aereo") { cumplido = (ratioTactico >= 45); mensaje = `Táctico: ${ratioTactico.toFixed(1)}% (Mín: 45%).`; } else if (appDB.objetivoCiclo === "reaccion") { cumplido = (ratioTecnico >= 50); mensaje = `Técnico: ${ratioTecnico.toFixed(1)}% (Mín: 50%).`; }
+        objTitle.innerText = cumplido ? "✅ Objetivo en Vías" : "⚠️ Objetivo en Riesgo"; objTitle.style.color = cumplido ? "#2e7d32" : "#c62828"; objContainer.style.borderLeftColor = cumplido ? "#4CAF50" : "#F44336"; objDesc.innerText = mensaje;
+    }
+
+    let totalTareasCog = 0; let totalCog = 0; for (const [f, data] of Object.entries(appDB.fechas)) { if(data.tareas) { data.tareas.forEach(t => { if(t.status !== 'missed') { totalTareasCog++; totalCog += (t.cognitiva || 2); } }); } }
+    let avgCog = totalTareasCog > 0 ? (totalCog / totalTareasCog) : 0; let percentThermo = (avgCog / 3) * 100;
+    document.getElementById('thermo-bar').style.width = `${percentThermo}%`; document.getElementById('thermo-bar').className = 'thermo-fill ' + (avgCog < 1.6 ? 'thermo-low' : (avgCog < 2.5 ? 'thermo-med' : 'thermo-high')); document.getElementById('thermo-status').innerText = avgCog === 0 ? "Sin datos" : (avgCog < 1.6 ? "Baja" : (avgCog < 2.5 ? "Media" : "Alta"));
+};
