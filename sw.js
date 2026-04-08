@@ -1,15 +1,36 @@
-const CACHE_NAME = 'adn-keeper-v1';
+const CACHE_NAME = 'keepers-app-v3';
+const urlsToCache = [
+  './',
+  './index.html',
+  './style.css',
+  './ESCUDO ATM.png'
+];
 
-// Omitimos cacheo estricto para que Firebase trabaje siempre en tiempo real
-self.addEventListener('install', (event) => {
-    self.skipWaiting();
+self.addEventListener('install', event => {
+  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(urlsToCache))
+  );
 });
 
-self.addEventListener('activate', (event) => {
-    event.waitUntil(clients.claim());
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cache => {
+          if (cache !== CACHE_NAME) {
+            return caches.delete(cache);
+          }
+        })
+      );
+    })
+  );
+  event.waitUntil(clients.claim());
 });
 
-self.addEventListener('fetch', (event) => {
-    // Para no entorpecer Firebase, respondemos con la red directamente
-    event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    fetch(event.request).catch(() => caches.match(event.request))
+  );
 });
