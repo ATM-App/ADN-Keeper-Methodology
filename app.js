@@ -25,7 +25,6 @@ const DEFAULT_USERS = {
 
 let SYSTEM_USERS = JSON.parse(localStorage.getItem('atleti_system_users_gk')) || DEFAULT_USERS;
 
-// Sincronización de Usuarios en Tiempo Real (Ruta Aislada)
 database.ref('system_users_gk').on('value', (snapshot) => {
     if(snapshot.val()) {
         SYSTEM_USERS = snapshot.val();
@@ -65,7 +64,6 @@ function iniciarAplicacion() {
         document.getElementById('btn-nav-cal').classList.add('hidden'); document.getElementById('btn-nav-macro').classList.add('hidden'); document.getElementById('btn-nav-dash').classList.add('hidden'); document.getElementById('btn-nav-set').classList.add('hidden');
         document.getElementById('btn-nav-admin').click(); 
         
-        // El Admin escucha toda la actividad de la cantera (Ruta Aislada planificaciones_gk)
         database.ref('planificaciones_gk').on('value', (snapshot) => {
             const allData = snapshot.val();
             if(allData) {
@@ -122,7 +120,7 @@ document.getElementById('btn-save-new-trainer').addEventListener('click', () => 
             SYSTEM_USERS[uId] = { pass: uPass, role: uRole, name: uName, cat: uCat, team: uTeam, sede: uSede, dbKey: newDbKey, initials: initials, photo: photoData };
             saveSystemUsers(); document.getElementById('create-trainer-modal').classList.add('hidden'); renderAdminPanel(); 
             document.getElementById('new-user-id').value = ''; document.getElementById('new-user-pass').value = ''; document.getElementById('new-user-name').value = ''; document.getElementById('new-user-team').value = ''; document.getElementById('new-user-sede').value = ''; document.getElementById('new-user-photo').value = '';
-            mostrarAlerta("✅ Creado", `Perfil ${uName} registrado.`, false);
+            window.mostrarAlerta("✅ Creado", `Perfil ${uName} registrado.`, false);
         } catch (error) { alert("Error: Imagen demasiado pesada o espacio insuficiente."); }
     };
     if (fileInput.files && fileInput.files[0]) { comprimirImagen(fileInput.files[0], function(fotoComprimida) { guardarEntrenador(fotoComprimida); }); } else { guardarEntrenador(null); }
@@ -139,14 +137,14 @@ document.getElementById('btn-update-trainer').addEventListener('click', () => {
         if (newId !== originalId) { SYSTEM_USERS[newId] = user; delete SYSTEM_USERS[originalId]; if (currentUser.id === originalId) currentUser.id = newId; }
         saveSystemUsers(); document.getElementById('edit-trainer-modal').classList.add('hidden');
         if (currentUser.id === newId) { document.getElementById('nav-user-name').innerText = user.name; let navAvatar = document.getElementById('nav-avatar'); if(user.photo) { navAvatar.innerHTML = `<img src="${user.photo}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`; } else { navAvatar.innerText = user.initials; } }
-        renderAdminPanel(); mostrarAlerta("✅ Actualizado", `Datos guardados.`, false);
+        renderAdminPanel(); window.mostrarAlerta("✅ Actualizado", `Datos guardados.`, false);
     };
     if (fileInput.files && fileInput.files[0]) { comprimirImagen(fileInput.files[0], function(fotoComprimida) { user.photo = fotoComprimida; finalizeUpdate(); }); } else { finalizeUpdate(); }
 });
 
 window.borrarEntrenador = function(uId, name) {
     if(uId === currentUser.id) return alert("No puedes eliminar tu propia cuenta mientras estás dentro.");
-    if(confirm(`¿Estás seguro de eliminar a ${name}?\nSe perderá su acceso.`)) { delete SYSTEM_USERS[uId]; saveSystemUsers(); renderAdminPanel(); mostrarAlerta("🗑️ Eliminado", `El perfil ha sido borrado.`, false); }
+    if(confirm(`¿Estás seguro de eliminar a ${name}?\nSe perderá su acceso.`)) { delete SYSTEM_USERS[uId]; saveSystemUsers(); renderAdminPanel(); window.mostrarAlerta("🗑️ Eliminado", `El perfil ha sido borrado.`, false); }
 };
 
 window.abrirEditarEntrenador = function(uId) {
@@ -351,7 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('select-perfil').addEventListener('change', (e) => {
         conectarBaseDeDatos(currentDBKey, e.target.value); 
-        mostrarAlerta("👤 Perfil Cambiado", `Ahora editando planificación de: ${e.target.options[e.target.selectedIndex].text}`, false);
+        window.mostrarAlerta("👤 Perfil Cambiado", `Ahora editando planificación de: ${e.target.options[e.target.selectedIndex].text}`, false);
     });
 
     const navBtns = document.querySelectorAll('.nav-btn'); const views = document.querySelectorAll('.view-section');
@@ -362,14 +360,13 @@ document.addEventListener('DOMContentLoaded', () => {
             views.forEach(v => { if (v.id === targetId) { v.classList.remove('hidden'); v.classList.add('active'); } else { v.classList.add('hidden'); v.classList.remove('active'); } });
             if(targetId === 'view-dashboard') { window.renderizarGraficos(); poblarSelectoresComparativa(); }
             if(targetId === 'view-settings') renderSettingsUI(); 
-            if(targetId === 'view-macro') renderMacrociclo();
+            if(targetId === 'view-macro') window.renderMacrociclo();
         });
     });
 
     document.getElementById('select-objetivo').addEventListener('change', (e) => { appDB.objetivoCiclo = e.target.value; guardarBaseDeDatos(); });
     const selectCiclo = document.getElementById('select-ciclo'); const calendarioContainer = document.getElementById('calendario-container');
     
-    // ASIGNACIÓN GLOBAL SEGURO
     window.generarCalendario = function(tipoCiclo) {
         calendarioContainer.innerHTML = ''; const hoy = new Date(); hoy.setHours(0, 0, 0, 0); let fechaInicioIteracion, numSemanas = 0;
         if (tipoCiclo === 'micro') { fechaInicioIteracion = getMonday(hoy); numSemanas = 1; } 
@@ -383,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let semanaHTML = `<div class="week-container"><h2 class="week-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;"><div><span>${formatWeekTitle(fechaSemana)}</span>${isSemanaActual ? '<span class="badge-actual">Microciclo Actual</span>' : ''}</div>${controlesSemana}</h2><div class="calendar-grid">`;
             for (let d = 0; d < 7; d++) {
                 let fechaDia = new Date(fechaSemana); fechaDia.setDate(fechaDia.getDate() + d); let dateStrISO = toLocalISO(fechaDia); let isHoy = (fechaDia.getTime() === hoy.getTime());
-                let btnAdd = (currentUser && currentUser.role === 'trainer') ? `<button class="btn-add" onclick="abrirModal('${dateStrISO}', '${fechaDia.toLocaleDateString('es-ES', {weekday: 'long'})} ${fechaDia.toLocaleDateString('es-ES', {day: '2-digit', month: 'short'})}')">+</button>` : ``;
+                let btnAdd = (currentUser && currentUser.role === 'trainer') ? `<button class="btn-add" onclick="window.abrirModal('${dateStrISO}', '${fechaDia.toLocaleDateString('es-ES', {weekday: 'long'})} ${fechaDia.toLocaleDateString('es-ES', {day: '2-digit', month: 'short'})}')">+</button>` : ``;
                 semanaHTML += `<div class="day-card ${isHoy ? 'today' : ''}" id="card-${dateStrISO}"><div class="day-header"><div class="day-info"><h3>${fechaDia.toLocaleDateString('es-ES', {weekday: 'long'})}</h3><span>${fechaDia.toLocaleDateString('es-ES', {day: '2-digit', month: 'short'})} ${isHoy ? ' (Hoy)' : ''}</span></div>${btnAdd}</div><div class="day-context-box" id="context-${dateStrISO}"></div><div class="task-list" id="list-${dateStrISO}"></div></div>`;
             }
             semanaHTML += `</div></div>`; calendarioContainer.innerHTML += semanaHTML;
@@ -434,22 +431,82 @@ document.addEventListener('DOMContentLoaded', () => {
         if (gesto && bloqueValue) {
             let fechaGuardar = new Date(diaYsemanaActual + "T12:00:00"); fechaGuardar.setDate(fechaGuardar.getDate() + 1); let isoManana = toLocalISO(fechaGuardar); 
             let partidoMañana = (appDB.fechas[isoManana] && appDB.fechas[isoManana].evento === 'partido'); const analisis = analizarGesto(gesto, bloqueValue);
-            if(partidoMañana && analisis.cargaTen === 3) { mostrarAlerta("🚨 ALERTA MÉDICA: PROTOCOLO MD-1", `Mañana hay partido. Prohibido introducir gestos de alta tensión articular (${gesto}) hoy.`, true, true); return; }
+            if(partidoMañana && analisis.cargaTen === 3) { window.mostrarAlerta("🚨 ALERTA MÉDICA: PROTOCOLO MD-1", `Mañana hay partido. Prohibido introducir gestos de alta tensión articular (${gesto}) hoy.`, true, true); return; }
             let repeticiones = parseInt(appDB.statsGestos[gesto]) || 0; let limite = document.getElementById('select-categoria').value === 'rendimiento' ? 4 : 8;
-            if (repeticiones >= limite) { if (alternativasInteligentes[gesto]) { mostrarSmartCard(gesto, alternativasInteligentes[gesto]); } else { mostrarAlerta("⚠️ Límite", `Has repetido ${gesto} ${repeticiones} veces.`, true); } return; }
+            if (repeticiones >= limite) { if (alternativasInteligentes[gesto]) { mostrarSmartCard(gesto, alternativasInteligentes[gesto]); } else { window.mostrarAlerta("⚠️ Límite", `Has repetido ${gesto} ${repeticiones} veces.`, true); } return; }
 
             appDB.fechas[diaYsemanaActual].tareas.push({ bloqueID: bloqueValue, bloqueTexto: selectBloque.options[selectBloque.selectedIndex].text, gesto: gesto, encadenado: selectEncadenamiento.value, cognitiva: analisis.cargaCog, status: 'planned', naturaleza: naturaleza, calidad: 0, duracion: duracion, rpe: rpe, carga: unidadesCarga, viaSalida: viaSalida });
             appDB.statsGestos[gesto] = repeticiones + 1; appDB.statsBloques[bloqueValue] = (appDB.statsBloques[bloqueValue] || 0) + 1;
-            mostrarAlerta("✅ Guardado", `Tarea registrada con ${unidadesCarga} Unidades de Carga.`, false);
-        } else { mostrarAlerta("✅ Guardado", `Contexto actualizado.`, false); }
+            window.mostrarAlerta("✅ Guardado", `Tarea registrada con ${unidadesCarga} Unidades de Carga.`, false);
+        } else { window.mostrarAlerta("✅ Guardado", `Contexto actualizado.`, false); }
         const cond = document.getElementById('input-condicional').value; const emo = document.getElementById('input-emocional').value; const trans = document.getElementById('input-transversal').value;
         appDB.fechas[diaYsemanaActual].contexto.condicional = cond || ""; appDB.fechas[diaYsemanaActual].contexto.emocional = emo || ""; appDB.fechas[diaYsemanaActual].contexto.transversal = trans || "";
         
-        guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); cerrarModal(); 
+        guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); window.cerrarModal(); 
     });
 
-    document.getElementById('btn-limpiar-dia').addEventListener('click', (e) => { e.preventDefault(); if(appDB.fechas[diaYsemanaActual]) { let tareasDelDia = appDB.fechas[diaYsemanaActual].tareas || []; tareasDelDia.forEach(t => { if(t.bloqueID && appDB.statsBloques[t.bloqueID]) appDB.statsBloques[t.bloqueID] = Math.max(0, appDB.statsBloques[t.bloqueID] - 1); if(t.gesto && appDB.statsGestos[t.gesto]) appDB.statsGestos[t.gesto] = Math.max(0, appDB.statsGestos[t.gesto] - 1); }); delete appDB.fechas[diaYsemanaActual]; guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); mostrarAlerta("🗑️ Día Limpiado", "Planificación eliminada.", false); } cerrarModal(); });
-    window.limpiarSemana = function(isoLunes) { if(confirm("¿Seguro que quieres borrar TODA la planificación de esta semana?")) { let fechaLunes = new Date(isoLunes + "T12:00:00"); for(let i=0; i<7; i++) { let fd = new Date(fechaLunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); if(appDB.fechas[iso]) { let tareas = appDB.fechas[iso].tareas || []; tareas.forEach(t => { if(t.bloqueID && appDB.statsBloques[t.bloqueID]) appDB.statsBloques[t.bloqueID] = Math.max(0, appDB.statsBloques[t.bloqueID] - 1); if(t.gesto && appDB.statsGestos[t.gesto]) appDB.statsGestos[t.gesto] = Math.max(0, appDB.statsGestos[t.gesto] - 1); }); delete appDB.fechas[iso]; } } guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); mostrarAlerta("🗑️ Semana Limpiada", "Toda la semana eliminada.", false); } };
+    document.getElementById('btn-limpiar-dia').addEventListener('click', (e) => { e.preventDefault(); if(appDB.fechas[diaYsemanaActual]) { let tareasDelDia = appDB.fechas[diaYsemanaActual].tareas || []; tareasDelDia.forEach(t => { if(t.bloqueID && appDB.statsBloques[t.bloqueID]) appDB.statsBloques[t.bloqueID] = Math.max(0, appDB.statsBloques[t.bloqueID] - 1); if(t.gesto && appDB.statsGestos[t.gesto]) appDB.statsGestos[t.gesto] = Math.max(0, appDB.statsGestos[t.gesto] - 1); }); delete appDB.fechas[diaYsemanaActual]; guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); window.mostrarAlerta("🗑️ Día Limpiado", "Planificación eliminada.", false); } window.cerrarModal(); });
+    window.limpiarSemana = function(isoLunes) { if(confirm("¿Seguro que quieres borrar TODA la planificación de esta semana?")) { let fechaLunes = new Date(isoLunes + "T12:00:00"); for(let i=0; i<7; i++) { let fd = new Date(fechaLunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); if(appDB.fechas[iso]) { let tareas = appDB.fechas[iso].tareas || []; tareas.forEach(t => { if(t.bloqueID && appDB.statsBloques[t.bloqueID]) appDB.statsBloques[t.bloqueID] = Math.max(0, appDB.statsBloques[t.bloqueID] - 1); if(t.gesto && appDB.statsGestos[t.gesto]) appDB.statsGestos[t.gesto] = Math.max(0, appDB.statsGestos[t.gesto] - 1); }); delete appDB.fechas[iso]; } } guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); window.mostrarAlerta("🗑️ Semana Limpiada", "Toda la semana eliminada.", false); } };
+
+    // --- RECONSTRUCCIÓN DEL MODAL DE AÑADIR ---
+    const modal = document.getElementById('add-modal');
+    window.abrirModal = (idUnico, tituloFormateado) => { 
+        diaYsemanaActual = idUnico; 
+        document.getElementById('modal-day-title').innerText = `Añadir a ${tituloFormateado}`; 
+        let diaTieneDatos = false; 
+        if(appDB.fechas[idUnico]) { 
+            diaTieneDatos = true; 
+            if(appDB.fechas[idUnico].evento) {
+                document.getElementById('select-evento-especial').value = appDB.fechas[idUnico].evento;
+                if(document.getElementById('select-evento-especial').dataset.customized) document.getElementById('select-evento-especial').dispatchEvent(new Event('change'));
+            }
+            if(appDB.fechas[idUnico].contexto) { 
+                document.getElementById('input-condicional').value = appDB.fechas[idUnico].contexto.condicional || ""; 
+                document.getElementById('input-emocional').value = appDB.fechas[idUnico].contexto.emocional || ""; 
+                document.getElementById('input-transversal').value = appDB.fechas[idUnico].contexto.transversal || ""; 
+            } 
+        } 
+        if(diaTieneDatos) { document.getElementById('btn-limpiar-dia').classList.remove('hidden'); } else { document.getElementById('btn-limpiar-dia').classList.add('hidden'); } 
+        document.getElementById('input-duracion').value = ""; 
+        modal.classList.remove('hidden'); 
+    };
+
+    window.cerrarModal = () => { 
+        modal.classList.add('hidden'); 
+        document.getElementById('smart-card-container').classList.add('hidden'); 
+        document.getElementById('encadenamiento-container').classList.add('hidden'); 
+        document.getElementById('btn-limpiar-dia').classList.add('hidden'); 
+        
+        ['select-evento-especial', 'select-bloque', 'select-encadenamiento', 'select-naturaleza', 'select-concepto', 'select-gesto', 'select-via-salida'].forEach(id => {
+            let el = document.getElementById(id);
+            if(el) {
+                if(id === 'select-naturaleza') el.value = 'semi_analitica';
+                else el.value = "";
+                
+                if(id === 'select-concepto' || id === 'select-gesto') {
+                    el.innerHTML = `<option value="">${id === 'select-concepto' ? '2. Concepto...' : '3. Gesto Específico...'}</option>`;
+                    el.disabled = true;
+                }
+                if(id === 'select-encadenamiento') el.innerHTML = '<option value="">Sin encadenamiento</option>';
+                
+                if(el.dataset.customized) el.dispatchEvent(new Event('change'));
+            }
+        });
+        
+        document.getElementById('playbook-container').classList.add('hidden'); 
+        document.getElementById('input-condicional').value = ""; document.getElementById('input-emocional').value = ""; document.getElementById('input-transversal').value = ""; 
+    };
+    
+    document.getElementById('btn-close-modal').addEventListener('click', window.cerrarModal);
+
+    window.mostrarAlerta = function(titulo, mensaje, esError, esWarningCognitivo = false) { 
+        const container = document.getElementById('alert-container'); 
+        let extraClass = esWarningCognitivo ? "warning-cog" : ""; 
+        let colorBorder = esError ? '#CB3524' : (esWarningCognitivo ? '#FF9800' : '#4CAF50'); 
+        if(esError && titulo.includes("MÉDICA")) extraClass = "critical-med"; 
+        container.innerHTML = `<div class="alert-box ${extraClass}" style="border-left-color: ${colorBorder}"><strong>${titulo}</strong><br>${mensaje}</div>`; 
+        setTimeout(() => container.innerHTML = '', 4500); 
+    };
 
     function mostrarSmartCard(gestoOriginal, alternativaObj) { let botonesHTML = ''; alternativaObj.opciones.forEach(opc => { botonesHTML += `<button class="btn-alt" onclick="aplicarAlternativaAutomatica('${opc}')"><span> Sustituir por: </span> <b>${opc}</b></button>`; }); document.getElementById('smart-card-container').innerHTML = `<div class="smart-card"><div class="smart-card-header">⚠️ Alerta Metodológica</div><p>Límite superado para <b>${gestoOriginal}</b>.<br>${alternativaObj.msg}</p><div class="smart-btn-group">${botonesHTML}</div></div>`; document.getElementById('smart-card-container').classList.remove('hidden'); }
     window.aplicarAlternativaAutomatica = function(nuevoGesto) { 
@@ -470,7 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for(let i=0; i<7; i++) { let fd = new Date(lunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); if(appDB.fechas[iso]) { let tareas = appDB.fechas[iso].tareas || []; tareas.forEach(t => { if(t.bloqueID && appDB.statsBloques[t.bloqueID]) appDB.statsBloques[t.bloqueID] = Math.max(0, appDB.statsBloques[t.bloqueID]-1); if(t.gesto && appDB.statsGestos[t.gesto]) appDB.statsGestos[t.gesto] = Math.max(0, appDB.statsGestos[t.gesto]-1); }); delete appDB.fechas[iso]; } }
         const pools = { directo: { tecnica: [{b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Blocaje aéreo", c:2}, {b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Despeje de puños: dos puños", c:2}], tactica: [{b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Centros aéreos", c:3}, {b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Faltas colgadas", c:3}] }, combinativo: { tecnica: [{b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Pase raso", c:2}, {b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Perfilamiento + control orientado", c:2}], tactica: [{b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Salida de balón (Generar superioridad zona de inicio)", c:3, v:"corta"}, {b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Detectar hombre libre en zonas intermedias (creación)", c:3, v:"media"}] }, transiciones: { tecnica: [{b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"1vs1: Cruz", c:3}, {b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Posición de reducción de espacios", c:2}], tactica: [{b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Pase a la espalda de la defensa", c:3}, {b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Búsqueda de contraataque", c:3, v:"larga"}] }, bloque_bajo: { tecnica: [{b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Blocaje frontal raso", c:2}, {b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Desvío raso con una mano", c:2}], tactica: [{b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Tiros laterales", c:3}, {b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Remates", c:3}] }, bloque_medio: { tecnica: [{b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Pase largo con balón en movimiento", c:2}, {b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Pase raso", c:2}], tactica: [{b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Detectar hombre libre en zonas intermedias (creación)", c:3, v:"media"}, {b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Posicionamiento y bisectriz", c:2}] }, bloque_alto: { tecnica: [{b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Pase largo con control previo", c:3}, {b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Volea", c:2}], tactica: [{b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Salida de balón (Generar superioridad zona de inicio)", c:3, v:"larga"}, {b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Despejes orientados", c:3, v:"larga"}] }, abp: { tecnica: [{b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Blocaje aéreo", c:2}, {b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Desvío alto con una mano", c:3}], tactica: [{b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Córners", c:3}, {b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Faltas directas", c:3}] } };
         for(let i=0; i<7; i++) { let fd = new Date(lunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); let jsDay = fd.getDay() === 0 ? 7 : fd.getDay(); let MD = jsDay - diaPartido; appDB.fechas[iso] = { evento: "", contexto: { condicional:"", emocional:"", transversal:"" }, tareas: [] }; if(jsDay === diaPartido) { appDB.fechas[iso].evento = "partido"; appDB.fechas[iso].contexto.emocional = "Foco competitivo"; } else if (trainingDays.includes(jsDay)) { let tTec = getLeastUsedTask(pools[perfilRival].tecnica); let tTac = getLeastUsedTask(pools[perfilRival].tactica); if (MD === -1) { appDB.fechas[iso].contexto.condicional = "Activación Pre-Partido"; appDB.fechas[iso].tareas.push({bloqueID:"tecnica_ofensiva", bloqueTexto:"⚔️ Técnica Ofensiva", gesto:"Volea", encadenado:"", cognitiva:1, status:'planned', naturaleza: 'analitica', calidad:0, duracion: 10, rpe: 3, carga: 30}); appDB.statsBloques["tecnica_ofensiva"] = (appDB.statsBloques["tecnica_ofensiva"]||0)+1; appDB.statsGestos["Volea"] = (appDB.statsGestos["Volea"]||0)+1; } else if (Math.abs(MD) === 2 || MD === -2) { appDB.fechas[iso].contexto.condicional = "Velocidad de Reacción"; appDB.fechas[iso].tareas.push({bloqueID:"tecnica_defensiva", bloqueTexto:"🛡️ Técnica Defensiva", gesto:"Desvío a mano cambiada", encadenado:"", cognitiva:3, status:'planned', naturaleza: 'juego_real', calidad:0, duracion: 15, rpe: 8, carga: 120}); appDB.statsBloques["tecnica_defensiva"] = (appDB.statsBloques["tecnica_defensiva"]||0)+1; appDB.statsGestos["Desvío a mano cambiada"] = (appDB.statsGestos["Desvío a mano cambiada"]||0)+1; } else { appDB.fechas[iso].contexto.condicional = "Tensión / Espacios Reducidos"; appDB.fechas[iso].tareas.push({bloqueID:tTec.b, bloqueTexto:tTec.t, gesto:tTec.g, encadenado:"", cognitiva:tTec.c, status:'planned', naturaleza: 'semi_analitica', calidad:0, duracion: 20, rpe: 6, carga: 120}); appDB.fechas[iso].tareas.push({bloqueID:tTac.b, bloqueTexto:tTac.t, gesto:tTac.g, encadenado:"", cognitiva:tTac.c, status:'planned', naturaleza: 'global', calidad:0, duracion: 25, rpe: 7, carga: 175, viaSalida: tTac.v || null}); appDB.statsBloques[tTec.b] = (appDB.statsBloques[tTec.b]||0)+1; appDB.statsGestos[tTec.g] = (appDB.statsGestos[tTec.g]||0)+1; appDB.statsBloques[tTac.b] = (appDB.statsBloques[tTac.b]||0)+1; appDB.statsGestos[tTac.g] = (appDB.statsGestos[tTac.g]||0)+1; } } else { appDB.fechas[iso].evento = "descanso"; } }
-        guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); autogenModal.classList.add('hidden'); mostrarAlerta("🪄 IA Mágica", "Semana generada asegurando máxima variabilidad.", false);
+        guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); autogenModal.classList.add('hidden'); window.mostrarAlerta("🪄 IA Mágica", "Semana generada asegurando máxima variabilidad.", false);
     });
 
     // --- IMPORTADOR ---
@@ -498,7 +555,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         }
-        guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); importModal.classList.add('hidden'); document.getElementById('ia-raw-text').value = ""; mostrarAlerta("🤖 Traductor Completado", `Se han volcado ${tareasAñadidas} tareas al mes actual.`, false);
+        guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); importModal.classList.add('hidden'); document.getElementById('ia-raw-text').value = ""; window.mostrarAlerta("🤖 Traductor Completado", `Se han volcado ${tareasAñadidas} tareas al mes actual.`, false);
     });
 
     // COMPARATIVA HISTÓRICA
@@ -652,7 +709,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (option.disabled) return;
                         
                         select.selectedIndex = index;
-                        select.value = option.value; 
+                        select.value = option.value; // Forzado absoluto del valor
                         triggerText.textContent = option.text;
                         
                         wrapper.classList.remove('open');
@@ -752,9 +809,9 @@ window.pintarDatosGuardados = function() {
                 let subTextoVisual = `<div style="display:flex; justify-content:space-between; align-items:center;"><span>${tarea.bloqueTexto.replace(icono, '').trim()}${viaSalidaHtml}</span> ${infoCarga}</div>`;
                 
                 let qualityHTML = '';
-                if(tarea.status === 'done' && currentUser && currentUser.role === 'trainer') { let q = tarea.calidad || 2; qualityHTML = `<div class="quality-controls" style="display:flex; justify-content:space-between; align-items:center; width:100%; border-top: 1px dashed rgba(0,0,0,0.1); margin-top:5px; padding-top:5px;"><span style="font-size:0.7rem; color:#666; font-weight:bold;">Calidad:</span><div><button class="btn-q ${q===3?'active-q-bien':''}" onclick="setTaskQuality('${fechaISO}', ${index}, 3)">🟢</button><button class="btn-q ${q===2?'active-q-reg':''}" onclick="setTaskQuality('${fechaISO}', ${index}, 2)">🟡</button><button class="btn-q ${q===1?'active-q-mal':''}" onclick="setTaskQuality('${fechaISO}', ${index}, 1)">🔴</button></div></div>`; }
+                if(tarea.status === 'done' && currentUser && currentUser.role === 'trainer') { let q = tarea.calidad || 2; qualityHTML = `<div class="quality-controls" style="display:flex; justify-content:space-between; align-items:center; width:100%; border-top: 1px dashed rgba(0,0,0,0.1); margin-top:5px; padding-top:5px;"><span style="font-size:0.7rem; color:#666; font-weight:bold;">Calidad:</span><div><button class="btn-q ${q===3?'active-q-bien':''}" onclick="window.setTaskQuality('${fechaISO}', ${index}, 3)">🟢</button><button class="btn-q ${q===2?'active-q-reg':''}" onclick="window.setTaskQuality('${fechaISO}', ${index}, 2)">🟡</button><button class="btn-q ${q===1?'active-q-mal':''}" onclick="window.setTaskQuality('${fechaISO}', ${index}, 1)">🔴</button></div></div>`; }
                 
-                let statusBtns = (currentUser && currentUser.role === 'trainer') ? `<div style="display:flex; gap:5px;"><button class="btn-status" onclick="toggleTaskStatus('${fechaISO}', ${index}, 'done')">✅</button><button class="btn-status" onclick="toggleTaskStatus('${fechaISO}', ${index}, 'missed')">❌</button></div>` : ``;
+                let statusBtns = (currentUser && currentUser.role === 'trainer') ? `<div style="display:flex; gap:5px;"><button class="btn-status" onclick="window.toggleTaskStatus('${fechaISO}', ${index}, 'done')">✅</button><button class="btn-status" onclick="window.toggleTaskStatus('${fechaISO}', ${index}, 'missed')">❌</button></div>` : ``;
 
                 listBox.innerHTML += `<div class="task-item ${colorClase} ${statusClass}"><div class="task-main"><span>${icono} ${tarea.gesto}</span> ${natHTML}</div><div class="task-sub">${subTextoVisual}</div>${cadenaHTML}<div class="task-status-bar">${statusBtns}</div>${qualityHTML}</div>`;
             });
