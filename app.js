@@ -256,17 +256,31 @@ const alternativasInteligentes = { "1vs1: Cruz": { msg: "Sugerencia: Mantén la 
 
 let appDB = {}; 
 
+// BLINDAJE: Sanitizador reconstruye arrays y recalcula desde cero limpiando caracteres inválidos (. # $ [ ] /)
 function sanitizeDB(db) {
     if(!db) db = {};
     if(!db.fechas) db.fechas = {};
     
+    let newStatsBloques = { tecnica_defensiva:0, tecnica_ofensiva:0, tactica_defensiva:0, tactica_ofensiva:0 };
+    let newStatsGestos = {};
+
     Object.keys(db.fechas).forEach(iso => {
         if(!db.fechas[iso].tareas) db.fechas[iso].tareas = [];
         if(!db.fechas[iso].contexto) db.fechas[iso].contexto = { condicional: "", emocional: "", transversal: "" };
+        
+        // Reconstrucción inteligente de métricas para reparar memorias corruptas
+        db.fechas[iso].tareas.forEach(t => {
+            if(t.bloqueID) newStatsBloques[t.bloqueID] = (newStatsBloques[t.bloqueID] || 0) + 1;
+            if(t.gesto) {
+                // Forzamos que los gestos viejos guarden sin caracteres prohibidos
+                t.gesto = t.gesto.replace(/[.#$\[\]/]/g, '').trim();
+                newStatsGestos[t.gesto] = (newStatsGestos[t.gesto] || 0) + 1;
+            }
+        });
     });
 
-    if(!db.statsBloques) db.statsBloques = { tecnica_defensiva:0, tecnica_ofensiva:0, tactica_defensiva:0, tactica_ofensiva:0 };
-    if(!db.statsGestos) db.statsGestos = {};
+    db.statsBloques = newStatsBloques;
+    db.statsGestos = newStatsGestos;
     if(!db.objetivoCiclo) db.objetivoCiclo = "equilibrio";
     return db;
 }
@@ -340,8 +354,8 @@ function renderSettingsUI() {
     } else { tituloConcepto.innerHTML = `Selecciona un concepto en la columna izquierda`; formGestos.classList.add('hidden'); }
 }
 document.getElementById('set-select-bloque').addEventListener('change', (e) => { setBloqueActual = e.target.value; setConceptoActual = null; renderSettingsUI(); });
-document.getElementById('set-btn-add-concepto').addEventListener('click', () => { let val = document.getElementById('set-input-concepto').value.trim(); if(val && !metodologia[setBloqueActual][val]) { metodologia[setBloqueActual][val] = []; guardarDiccionario(); document.getElementById('set-input-concepto').value = ""; renderSettingsUI(); } });
-document.getElementById('set-btn-add-gesto').addEventListener('click', () => { let val = document.getElementById('set-input-gesto').value.trim(); if(val && setConceptoActual) { metodologia[setBloqueActual][setConceptoActual].push(val); guardarDiccionario(); document.getElementById('set-input-gesto').value = ""; renderSettingsUI(); } });
+document.getElementById('set-btn-add-concepto').addEventListener('click', () => { let val = document.getElementById('set-input-concepto').value.trim().replace(/[.#$\[\]/]/g, ''); if(val && !metodologia[setBloqueActual][val]) { metodologia[setBloqueActual][val] = []; guardarDiccionario(); document.getElementById('set-input-concepto').value = ""; renderSettingsUI(); } });
+document.getElementById('set-btn-add-gesto').addEventListener('click', () => { let val = document.getElementById('set-input-gesto').value.trim().replace(/[.#$\[\]/]/g, ''); if(val && setConceptoActual) { metodologia[setBloqueActual][setConceptoActual].push(val); guardarDiccionario(); document.getElementById('set-input-gesto').value = ""; renderSettingsUI(); } });
 window.borrarConcepto = function(e, concepto) { e.stopPropagation(); if(confirm(`¿Borrar el concepto "${concepto}" y sus gestos?`)) { delete metodologia[setBloqueActual][concepto]; if(setConceptoActual === concepto) setConceptoActual = null; guardarDiccionario(); renderSettingsUI(); } };
 window.borrarGesto = function(index) { metodologia[setBloqueActual][setConceptoActual].splice(index, 1); guardarDiccionario(); renderSettingsUI(); };
 
@@ -425,11 +439,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if(!appDB.fechas[diaYsemanaActual].tareas) appDB.fechas[diaYsemanaActual].tareas = [];
 
         appDB.fechas[diaYsemanaActual].evento = document.getElementById('select-evento-especial').value;
-        const gesto = selectGesto.value; const bloqueValue = selectBloque.value; const naturaleza = selectNaturaleza.value;
+        let gesto = selectGesto.value; const bloqueValue = selectBloque.value; const naturaleza = selectNaturaleza.value;
         let duracion = parseInt(document.getElementById('input-duracion').value) || 0; let rpe = parseInt(document.getElementById('select-rpe').value) || 5; let unidadesCarga = duracion * rpe;
         let viaSalida = (bloqueValue === 'tactica_ofensiva') ? document.getElementById('select-via-salida').value : null;
 
         if (gesto && bloqueValue) {
+            gesto = gesto.replace(/[.#$\[\]/]/g, ''); // Limpiar gesto para evitar caída en Firebase
             let fechaGuardar = new Date(diaYsemanaActual + "T12:00:00"); fechaGuardar.setDate(fechaGuardar.getDate() + 1); let isoManana = toLocalISO(fechaGuardar); 
             let partidoMañana = (appDB.fechas[isoManana] && appDB.fechas[isoManana].evento === 'partido'); const analisis = analizarGesto(gesto, bloqueValue);
             if(partidoMañana && analisis.cargaTen === 3) { window.mostrarAlerta("🚨 ALERTA MÉDICA: PROTOCOLO MD-1", `Mañana hay partido. Prohibido introducir gestos de alta tensión articular (${gesto}) hoy.`, true, true); return; }
@@ -437,17 +452,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (repeticiones >= limite) { if (alternativasInteligentes[gesto]) { mostrarSmartCard(gesto, alternativasInteligentes[gesto]); } else { window.mostrarAlerta("⚠️ Límite", `Has repetido ${gesto} ${repeticiones} veces.`, true); } return; }
 
             appDB.fechas[diaYsemanaActual].tareas.push({ bloqueID: bloqueValue, bloqueTexto: selectBloque.options[selectBloque.selectedIndex].text, gesto: gesto, encadenado: selectEncadenamiento.value, cognitiva: analisis.cargaCog, status: 'planned', naturaleza: naturaleza, calidad: 0, duracion: duracion, rpe: rpe, carga: unidadesCarga, viaSalida: viaSalida });
-            appDB.statsGestos[gesto] = repeticiones + 1; appDB.statsBloques[bloqueValue] = (appDB.statsBloques[bloqueValue] || 0) + 1;
             window.mostrarAlerta("✅ Guardado", `Tarea registrada con ${unidadesCarga} Unidades de Carga.`, false);
         } else { window.mostrarAlerta("✅ Guardado", `Contexto actualizado.`, false); }
+        
         const cond = document.getElementById('input-condicional').value; const emo = document.getElementById('input-emocional').value; const trans = document.getElementById('input-transversal').value;
         appDB.fechas[diaYsemanaActual].contexto.condicional = cond || ""; appDB.fechas[diaYsemanaActual].contexto.emocional = emo || ""; appDB.fechas[diaYsemanaActual].contexto.transversal = trans || "";
         
         guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); window.cerrarModal(); 
     });
 
-    document.getElementById('btn-limpiar-dia').addEventListener('click', (e) => { e.preventDefault(); if(appDB.fechas[diaYsemanaActual]) { let tareasDelDia = appDB.fechas[diaYsemanaActual].tareas || []; tareasDelDia.forEach(t => { if(t.bloqueID && appDB.statsBloques[t.bloqueID]) appDB.statsBloques[t.bloqueID] = Math.max(0, appDB.statsBloques[t.bloqueID] - 1); if(t.gesto && appDB.statsGestos[t.gesto]) appDB.statsGestos[t.gesto] = Math.max(0, appDB.statsGestos[t.gesto] - 1); }); delete appDB.fechas[diaYsemanaActual]; guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); window.mostrarAlerta("🗑️ Día Limpiado", "Planificación eliminada.", false); } window.cerrarModal(); });
-    window.limpiarSemana = function(isoLunes) { if(confirm("¿Seguro que quieres borrar TODA la planificación de esta semana?")) { let fechaLunes = new Date(isoLunes + "T12:00:00"); for(let i=0; i<7; i++) { let fd = new Date(fechaLunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); if(appDB.fechas[iso]) { let tareas = appDB.fechas[iso].tareas || []; tareas.forEach(t => { if(t.bloqueID && appDB.statsBloques[t.bloqueID]) appDB.statsBloques[t.bloqueID] = Math.max(0, appDB.statsBloques[t.bloqueID] - 1); if(t.gesto && appDB.statsGestos[t.gesto]) appDB.statsGestos[t.gesto] = Math.max(0, appDB.statsGestos[t.gesto] - 1); }); delete appDB.fechas[iso]; } } guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); window.mostrarAlerta("🗑️ Semana Limpiada", "Toda la semana eliminada.", false); } };
+    document.getElementById('btn-limpiar-dia').addEventListener('click', (e) => { e.preventDefault(); if(appDB.fechas[diaYsemanaActual]) { delete appDB.fechas[diaYsemanaActual]; guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); window.mostrarAlerta("🗑️ Día Limpiado", "Planificación eliminada.", false); } window.cerrarModal(); });
+    window.limpiarSemana = function(isoLunes) { if(confirm("¿Seguro que quieres borrar TODA la planificación de esta semana?")) { let fechaLunes = new Date(isoLunes + "T12:00:00"); for(let i=0; i<7; i++) { let fd = new Date(fechaLunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); if(appDB.fechas[iso]) { delete appDB.fechas[iso]; } } guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); window.mostrarAlerta("🗑️ Semana Limpiada", "Toda la semana eliminada.", false); } };
 
     // --- RECONSTRUCCIÓN DEL MODAL DE AÑADIR ---
     const modal = document.getElementById('add-modal');
@@ -525,13 +540,15 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-ejecutar-ia').addEventListener('click', () => {
         let diaPartido = parseInt(document.getElementById('ia-dia-partido').value); let perfilRival = document.getElementById('ia-perfil-rival').value; let trainingDaysNodes = document.querySelectorAll('input[name="ia-train-day"]:checked'); let trainingDays = Array.from(trainingDaysNodes).map(cb => parseInt(cb.value));
         if(trainingDays.length === 0) { alert("Selecciona al menos un día de entrenamiento."); return; } const hoy = new Date(); let lunes = getMonday(hoy);
-        for(let i=0; i<7; i++) { let fd = new Date(lunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); if(appDB.fechas[iso]) { let tareas = appDB.fechas[iso].tareas || []; tareas.forEach(t => { if(t.bloqueID && appDB.statsBloques[t.bloqueID]) appDB.statsBloques[t.bloqueID] = Math.max(0, appDB.statsBloques[t.bloqueID]-1); if(t.gesto && appDB.statsGestos[t.gesto]) appDB.statsGestos[t.gesto] = Math.max(0, appDB.statsGestos[t.gesto]-1); }); delete appDB.fechas[iso]; } }
+        for(let i=0; i<7; i++) { let fd = new Date(lunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); if(appDB.fechas[iso]) { delete appDB.fechas[iso]; } }
         const pools = { directo: { tecnica: [{b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Blocaje aéreo", c:2}, {b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Despeje de puños: dos puños", c:2}], tactica: [{b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Centros aéreos", c:3}, {b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Faltas colgadas", c:3}] }, combinativo: { tecnica: [{b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Pase raso", c:2}, {b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Perfilamiento + control orientado", c:2}], tactica: [{b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Salida de balón (Generar superioridad zona de inicio)", c:3, v:"corta"}, {b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Detectar hombre libre en zonas intermedias (creación)", c:3, v:"media"}] }, transiciones: { tecnica: [{b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"1vs1: Cruz", c:3}, {b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Posición de reducción de espacios", c:2}], tactica: [{b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Pase a la espalda de la defensa", c:3}, {b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Búsqueda de contraataque", c:3, v:"larga"}] }, bloque_bajo: { tecnica: [{b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Blocaje frontal raso", c:2}, {b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Desvío raso con una mano", c:2}], tactica: [{b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Tiros laterales", c:3}, {b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Remates", c:3}] }, bloque_medio: { tecnica: [{b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Pase largo con balón en movimiento", c:2}, {b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Pase raso", c:2}], tactica: [{b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Detectar hombre libre en zonas intermedias (creación)", c:3, v:"media"}, {b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Posicionamiento y bisectriz", c:2}] }, bloque_alto: { tecnica: [{b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Pase largo con control previo", c:3}, {b:"tecnica_ofensiva", t:"⚔️ Técnica Ofensiva", g:"Volea", c:2}], tactica: [{b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Salida de balón (Generar superioridad zona de inicio)", c:3, v:"larga"}, {b:"tactica_ofensiva", t:"🔥 Táctica Ofensiva", g:"Despejes orientados", c:3, v:"larga"}] }, abp: { tecnica: [{b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Blocaje aéreo", c:2}, {b:"tecnica_defensiva", t:"🛡️ Técnica Defensiva", g:"Desvío alto con una mano", c:3}], tactica: [{b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Córners", c:3}, {b:"tactica_defensiva", t:"🛑 Táctica Defensiva", g:"Faltas directas", c:3}] } };
-        for(let i=0; i<7; i++) { let fd = new Date(lunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); let jsDay = fd.getDay() === 0 ? 7 : fd.getDay(); let MD = jsDay - diaPartido; appDB.fechas[iso] = { evento: "", contexto: { condicional:"", emocional:"", transversal:"" }, tareas: [] }; if(jsDay === diaPartido) { appDB.fechas[iso].evento = "partido"; appDB.fechas[iso].contexto.emocional = "Foco competitivo"; } else if (trainingDays.includes(jsDay)) { let tTec = getLeastUsedTask(pools[perfilRival].tecnica); let tTac = getLeastUsedTask(pools[perfilRival].tactica); if (MD === -1) { appDB.fechas[iso].contexto.condicional = "Activación Pre-Partido"; appDB.fechas[iso].tareas.push({bloqueID:"tecnica_ofensiva", bloqueTexto:"⚔️ Técnica Ofensiva", gesto:"Volea", encadenado:"", cognitiva:1, status:'planned', naturaleza: 'analitica', calidad:0, duracion: 10, rpe: 3, carga: 30}); appDB.statsBloques["tecnica_ofensiva"] = (appDB.statsBloques["tecnica_ofensiva"]||0)+1; appDB.statsGestos["Volea"] = (appDB.statsGestos["Volea"]||0)+1; } else if (Math.abs(MD) === 2 || MD === -2) { appDB.fechas[iso].contexto.condicional = "Velocidad de Reacción"; appDB.fechas[iso].tareas.push({bloqueID:"tecnica_defensiva", bloqueTexto:"🛡️ Técnica Defensiva", gesto:"Desvío a mano cambiada", encadenado:"", cognitiva:3, status:'planned', naturaleza: 'juego_real', calidad:0, duracion: 15, rpe: 8, carga: 120}); appDB.statsBloques["tecnica_defensiva"] = (appDB.statsBloques["tecnica_defensiva"]||0)+1; appDB.statsGestos["Desvío a mano cambiada"] = (appDB.statsGestos["Desvío a mano cambiada"]||0)+1; } else { appDB.fechas[iso].contexto.condicional = "Tensión / Espacios Reducidos"; appDB.fechas[iso].tareas.push({bloqueID:tTec.b, bloqueTexto:tTec.t, gesto:tTec.g, encadenado:"", cognitiva:tTec.c, status:'planned', naturaleza: 'semi_analitica', calidad:0, duracion: 20, rpe: 6, carga: 120}); appDB.fechas[iso].tareas.push({bloqueID:tTac.b, bloqueTexto:tTac.t, gesto:tTac.g, encadenado:"", cognitiva:tTac.c, status:'planned', naturaleza: 'global', calidad:0, duracion: 25, rpe: 7, carga: 175, viaSalida: tTac.v || null}); appDB.statsBloques[tTec.b] = (appDB.statsBloques[tTec.b]||0)+1; appDB.statsGestos[tTec.g] = (appDB.statsGestos[tTec.g]||0)+1; appDB.statsBloques[tTac.b] = (appDB.statsBloques[tTac.b]||0)+1; appDB.statsGestos[tTac.g] = (appDB.statsGestos[tTac.g]||0)+1; } } else { appDB.fechas[iso].evento = "descanso"; } }
+        for(let i=0; i<7; i++) { let fd = new Date(lunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); let jsDay = fd.getDay() === 0 ? 7 : fd.getDay(); let MD = jsDay - diaPartido; appDB.fechas[iso] = { evento: "", contexto: { condicional:"", emocional:"", transversal:"" }, tareas: [] }; if(jsDay === diaPartido) { appDB.fechas[iso].evento = "partido"; appDB.fechas[iso].contexto.emocional = "Foco competitivo"; } else if (trainingDays.includes(jsDay)) { let tTec = getLeastUsedTask(pools[perfilRival].tecnica); let tTac = getLeastUsedTask(pools[perfilRival].tactica); if (MD === -1) { appDB.fechas[iso].contexto.condicional = "Activación Pre-Partido"; appDB.fechas[iso].tareas.push({bloqueID:"tecnica_ofensiva", bloqueTexto:"⚔️ Técnica Ofensiva", gesto:"Volea", encadenado:"", cognitiva:1, status:'planned', naturaleza: 'analitica', calidad:0, duracion: 10, rpe: 3, carga: 30}); } else if (Math.abs(MD) === 2 || MD === -2) { appDB.fechas[iso].contexto.condicional = "Velocidad de Reacción"; appDB.fechas[iso].tareas.push({bloqueID:"tecnica_defensiva", bloqueTexto:"🛡️ Técnica Defensiva", gesto:"Desvío a mano cambiada", encadenado:"", cognitiva:3, status:'planned', naturaleza: 'juego_real', calidad:0, duracion: 15, rpe: 8, carga: 120}); } else { appDB.fechas[iso].contexto.condicional = "Tensión / Espacios Reducidos"; appDB.fechas[iso].tareas.push({bloqueID:tTec.b, bloqueTexto:tTec.t, gesto:tTec.g, encadenado:"", cognitiva:tTec.c, status:'planned', naturaleza: 'semi_analitica', calidad:0, duracion: 20, rpe: 6, carga: 120}); appDB.fechas[iso].tareas.push({bloqueID:tTac.b, bloqueTexto:tTac.t, gesto:tTac.g, encadenado:"", cognitiva:tTac.c, status:'planned', naturaleza: 'global', calidad:0, duracion: 25, rpe: 7, carga: 175, viaSalida: tTac.v || null}); } } else { appDB.fechas[iso].evento = "descanso"; } }
         guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); autogenModal.classList.add('hidden'); window.mostrarAlerta("🪄 IA Mágica", "Semana generada asegurando máxima variabilidad.", false);
     });
 
-    // --- IMPORTADOR INTELIGENTE MULTI-MES ---
+    // --- IMPORTADOR INTELIGENTE MULTI-MES SANITIZADO ---
+    function sanitizeText(str) { return str ? str.replace(/[.#$\[\]/]/g, '') : ""; }
+
     const importModal = document.getElementById('import-text-modal'); document.getElementById('btn-open-import').addEventListener('click', () => importModal.classList.remove('hidden')); document.getElementById('btn-close-import').addEventListener('click', () => importModal.classList.add('hidden'));
     
     document.getElementById('btn-process-text').addEventListener('click', () => {
@@ -553,10 +570,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // 1. DETECTAR MES EN EL TEXTO Y AJUSTAR EL CALENDARIO
             let mesEncontrado = mesesNombres.findIndex(m => upperLine.includes(m));
-            if (mesEncontrado !== -1 && upperLine.length < 100 && (upperLine.includes('—') || upperLine.includes('-') || upperLine.charCodeAt(0) > 255)) {
+            let esCabeceraMes = mesEncontrado !== -1 && upperLine.length < 80 && (upperLine.includes('—') || upperLine.includes('-') || upperLine.includes('🎯') || /[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(upperLine) || upperLine.charCodeAt(0) > 255);
+            
+            if (esCabeceraMes) {
                 let targetYear = mesEncontrado >= 6 ? startYear : startYear + 1;
                 fechaBase = getPrimerLunesMeso(new Date(targetYear, mesEncontrado, 1));
-                currentWeekOffset = 0; // Reseteamos la semana al cambiar de mes
+                currentWeekOffset = 0; // Reseteamos la semana al saltar de mes
                 continue;
             }
 
@@ -601,18 +620,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(!appDB.fechas[iso]) appDB.fechas[iso] = { evento: "", contexto: { condicional:"", emocional:"", transversal:"" }, tareas: [] };
                     if(!appDB.fechas[iso].tareas) appDB.fechas[iso].tareas = []; 
 
-                    let tecDef = celdas[1] ? celdas[1].trim() : ""; 
-                    let tecOf = celdas[2] ? celdas[2].trim() : ""; 
-                    let tacDef = celdas[3] ? celdas[3].trim() : ""; 
-                    let tacOf = celdas[4] ? celdas[4].trim() : ""; 
-                    let cond = celdas[5] ? celdas[5].trim() : ""; 
-                    let emo = celdas[6] ? celdas[6].trim() : ""; 
+                    // ELIMINAMOS PUNTOS O CARACTERES RAROS DIRECTAMENTE DEL EXCEL/WORD
+                    let tecDef = sanitizeText(celdas[1]); 
+                    let tecOf = sanitizeText(celdas[2]); 
+                    let tacDef = sanitizeText(celdas[3]); 
+                    let tacOf = sanitizeText(celdas[4]); 
+                    let cond = sanitizeText(celdas[5]); 
+                    let emo = sanitizeText(celdas[6]); 
+                    
                     let ignorar = ["TÉCNICA", "TECNICA", "TÁCTICA", "TACTICA", "CONDICIONAL", "EMOCIONAL", "DÍA", "DIA"];
                     
-                    if (tecDef && !ignorar.some(palabra => tecDef.toUpperCase().includes(palabra))) { appDB.fechas[iso].tareas.push({ bloqueID: "tecnica_defensiva", bloqueTexto: "🛡️ Téc. Defensiva", gesto: tecDef, encadenado: "", cognitiva: 2, status: 'planned', naturaleza: 'semi_analitica', calidad: 0, duracion: 15, rpe: 5, carga: 75 }); appDB.statsBloques["tecnica_defensiva"]=(appDB.statsBloques["tecnica_defensiva"]||0)+1; appDB.statsGestos[tecDef] = (appDB.statsGestos[tecDef] || 0) + 1; tareasAñadidas++;}
-                    if (tecOf && !ignorar.some(palabra => tecOf.toUpperCase().includes(palabra))) { appDB.fechas[iso].tareas.push({ bloqueID: "tecnica_ofensiva", bloqueTexto: "⚔️ Téc. Ofensiva", gesto: tecOf, encadenado: "", cognitiva: 2, status: 'planned', naturaleza: 'semi_analitica', calidad: 0, duracion: 15, rpe: 5, carga: 75 }); appDB.statsBloques["tecnica_ofensiva"]=(appDB.statsBloques["tecnica_ofensiva"]||0)+1; appDB.statsGestos[tecOf] = (appDB.statsGestos[tecOf] || 0) + 1; tareasAñadidas++;}
-                    if (tacDef && !ignorar.some(palabra => tacDef.toUpperCase().includes(palabra))) { appDB.fechas[iso].tareas.push({ bloqueID: "tactica_defensiva", bloqueTexto: "🛑 Tác. Defensiva", gesto: tacDef, encadenado: "", cognitiva: 3, status: 'planned', naturaleza: 'semi_analitica', calidad: 0, duracion: 20, rpe: 6, carga: 120 }); appDB.statsBloques["tactica_defensiva"]=(appDB.statsBloques["tactica_defensiva"]||0)+1; appDB.statsGestos[tacDef] = (appDB.statsGestos[tacDef] || 0) + 1; tareasAñadidas++;}
-                    if (tacOf && !ignorar.some(palabra => tacOf.toUpperCase().includes(palabra))) { appDB.fechas[iso].tareas.push({ bloqueID: "tactica_ofensiva", bloqueTexto: "🔥 Tác. Ofensiva", gesto: tacOf, encadenado: "", cognitiva: 3, status: 'planned', naturaleza: 'semi_analitica', calidad: 0, duracion: 20, rpe: 6, carga: 120, viaSalida: "corta" }); appDB.statsBloques["tactica_ofensiva"]=(appDB.statsBloques["tactica_ofensiva"]||0)+1; appDB.statsGestos[tacOf] = (appDB.statsGestos[tacOf] || 0) + 1; tareasAñadidas++;}
+                    if (tecDef && !ignorar.some(palabra => tecDef.toUpperCase().includes(palabra))) { appDB.fechas[iso].tareas.push({ bloqueID: "tecnica_defensiva", bloqueTexto: "🛡️ Téc. Defensiva", gesto: tecDef, encadenado: "", cognitiva: 2, status: 'planned', naturaleza: 'semi_analitica', calidad: 0, duracion: 15, rpe: 5, carga: 75 }); tareasAñadidas++;}
+                    if (tecOf && !ignorar.some(palabra => tecOf.toUpperCase().includes(palabra))) { appDB.fechas[iso].tareas.push({ bloqueID: "tecnica_ofensiva", bloqueTexto: "⚔️ Téc. Ofensiva", gesto: tecOf, encadenado: "", cognitiva: 2, status: 'planned', naturaleza: 'semi_analitica', calidad: 0, duracion: 15, rpe: 5, carga: 75 }); tareasAñadidas++;}
+                    if (tacDef && !ignorar.some(palabra => tacDef.toUpperCase().includes(palabra))) { appDB.fechas[iso].tareas.push({ bloqueID: "tactica_defensiva", bloqueTexto: "🛑 Tác. Defensiva", gesto: tacDef, encadenado: "", cognitiva: 3, status: 'planned', naturaleza: 'semi_analitica', calidad: 0, duracion: 20, rpe: 6, carga: 120 }); tareasAñadidas++;}
+                    if (tacOf && !ignorar.some(palabra => tacOf.toUpperCase().includes(palabra))) { appDB.fechas[iso].tareas.push({ bloqueID: "tactica_ofensiva", bloqueTexto: "🔥 Tác. Ofensiva", gesto: tacOf, encadenado: "", cognitiva: 3, status: 'planned', naturaleza: 'semi_analitica', calidad: 0, duracion: 20, rpe: 6, carga: 120, viaSalida: "corta" }); tareasAñadidas++;}
+                    
                     let ctx = appDB.fechas[iso].contexto || {}; if(cond && !ignorar.some(palabra => cond.toUpperCase().includes(palabra))) ctx.condicional = cond; if(emo && !ignorar.some(palabra => emo.toUpperCase().includes(palabra))) ctx.emocional = emo; appDB.fechas[iso].contexto = ctx;
                 }
             }
