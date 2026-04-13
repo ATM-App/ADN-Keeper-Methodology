@@ -367,6 +367,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('select-objetivo').addEventListener('change', (e) => { appDB.objetivoCiclo = e.target.value; guardarBaseDeDatos(); });
     const selectCiclo = document.getElementById('select-ciclo'); const calendarioContainer = document.getElementById('calendario-container');
     
+    // ASIGNACIÓN GLOBAL SEGURO
     window.generarCalendario = function(tipoCiclo) {
         calendarioContainer.innerHTML = ''; const hoy = new Date(); hoy.setHours(0, 0, 0, 0); let fechaInicioIteracion, numSemanas = 0;
         if (tipoCiclo === 'micro') { fechaInicioIteracion = getMonday(hoy); numSemanas = 1; } 
@@ -530,23 +531,84 @@ document.addEventListener('DOMContentLoaded', () => {
         guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); autogenModal.classList.add('hidden'); window.mostrarAlerta("🪄 IA Mágica", "Semana generada asegurando máxima variabilidad.", false);
     });
 
-    // --- IMPORTADOR ---
+    // --- IMPORTADOR INTELIGENTE MULTI-MES ---
     const importModal = document.getElementById('import-text-modal'); document.getElementById('btn-open-import').addEventListener('click', () => importModal.classList.remove('hidden')); document.getElementById('btn-close-import').addEventListener('click', () => importModal.classList.add('hidden'));
+    
     document.getElementById('btn-process-text').addEventListener('click', () => {
-        const text = document.getElementById('ia-raw-text').value; if(!text) return; let lines = text.split('\n').map(l => l.trim()).filter(l => l !== ""); let currentWeekOffset = 0; let fechaBase = getPrimerLunesMeso(new Date()); let tareasAñadidas = 0;
+        const text = document.getElementById('ia-raw-text').value; 
+        if(!text) return; 
+        let lines = text.split('\n').map(l => l.trim()).filter(l => l !== ""); 
+        
+        const hoy = new Date();
+        let startYear = hoy.getMonth() >= 6 ? hoy.getFullYear() : hoy.getFullYear() - 1;
+        let fechaBase = getPrimerLunesMeso(hoy); 
+        let currentWeekOffset = 0; 
+        let tareasAñadidas = 0;
+        
+        const mesesNombres = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+
         for (let i = 0; i < lines.length; i++) {
-            let l = lines[i]; if(l.toUpperCase().includes('MICROCICLO')) { let match = l.match(/MICROCICLO\s*(\d+)/i); if(match) { currentWeekOffset = parseInt(match[1]) - 1; } else { currentWeekOffset++; } continue; }
-            let celdas = l.split(/\t/); if(celdas.length < 3) celdas = l.split(/\s{3,}/); let diaTexto = celdas[0].toUpperCase(); let diasValidos = ['L', 'M', 'X', 'J', 'V', 'S', 'D', 'LUNES', 'MARTES', 'MIÉRCOLES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'SABADO', 'DOMINGO'];
-            if (celdas.length === 1 && diasValidos.includes(diaTexto)) { if (i + 6 < lines.length) { celdas = [diaTexto, lines[i+1], lines[i+2], lines[i+3], lines[i+4], lines[i+5], lines[i+6]]; i += 6; } }
+            let l = lines[i]; 
+            let upperLine = l.toUpperCase();
+            
+            // 1. DETECTAR MES EN EL TEXTO Y AJUSTAR EL CALENDARIO
+            let mesEncontrado = mesesNombres.findIndex(m => upperLine.includes(m));
+            if (mesEncontrado !== -1 && upperLine.length < 100 && (upperLine.includes('—') || upperLine.includes('-') || upperLine.charCodeAt(0) > 255)) {
+                let targetYear = mesEncontrado >= 6 ? startYear : startYear + 1;
+                fechaBase = getPrimerLunesMeso(new Date(targetYear, mesEncontrado, 1));
+                currentWeekOffset = 0; // Reseteamos la semana al cambiar de mes
+                continue;
+            }
+
+            // 2. DETECTAR MICROCICLO
+            if(upperLine.includes('MICROCICLO')) { 
+                let match = upperLine.match(/MICROCICLO\s*(\d+)/i); 
+                if(match) { currentWeekOffset = parseInt(match[1]) - 1; } 
+                else { currentWeekOffset++; } 
+                continue; 
+            }
+            
+            // 3. PARSEAR DÍAS Y TAREAS
+            let celdas = l.split(/\t/); 
+            if(celdas.length < 3) celdas = l.split(/\s{3,}/); 
+            let diaTexto = celdas[0].toUpperCase(); 
+            let diasValidos = ['L', 'M', 'X', 'J', 'V', 'S', 'D', 'LUNES', 'MARTES', 'MIÉRCOLES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'SABADO', 'DOMINGO'];
+            
+            if (celdas.length === 1 && diasValidos.includes(diaTexto)) { 
+                if (i + 6 < lines.length) { 
+                    celdas = [diaTexto, lines[i+1], lines[i+2], lines[i+3], lines[i+4], lines[i+5], lines[i+6]]; 
+                    i += 6; 
+                } 
+            }
+            
             if(celdas.length >= 3) {
-                let offsetDia = -1; diaTexto = celdas[0].toUpperCase(); if(diaTexto === 'L' || diaTexto === 'LUNES') offsetDia = 0; else if(diaTexto === 'M' || diaTexto === 'MARTES') offsetDia = 1; else if(diaTexto === 'X' || diaTexto === 'MIÉRCOLES' || diaTexto === 'MIERCOLES') offsetDia = 2; else if(diaTexto === 'J' || diaTexto === 'JUEVES') offsetDia = 3; else if(diaTexto === 'V' || diaTexto === 'VIERNES') offsetDia = 4; else if(diaTexto === 'S' || diaTexto === 'SÁBADO' || diaTexto === 'SABADO') offsetDia = 5; else if(diaTexto === 'D' || diaTexto === 'DOMINGO') offsetDia = 6;
+                let offsetDia = -1; 
+                diaTexto = celdas[0].toUpperCase(); 
+                if(diaTexto === 'L' || diaTexto === 'LUNES') offsetDia = 0; 
+                else if(diaTexto === 'M' || diaTexto === 'MARTES') offsetDia = 1; 
+                else if(diaTexto === 'X' || diaTexto === 'MIÉRCOLES' || diaTexto === 'MIERCOLES') offsetDia = 2; 
+                else if(diaTexto === 'J' || diaTexto === 'JUEVES') offsetDia = 3; 
+                else if(diaTexto === 'V' || diaTexto === 'VIERNES') offsetDia = 4; 
+                else if(diaTexto === 'S' || diaTexto === 'SÁBADO' || diaTexto === 'SABADO') offsetDia = 5; 
+                else if(diaTexto === 'D' || diaTexto === 'DOMINGO') offsetDia = 6;
+                
                 if(offsetDia !== -1) {
-                    let fechaDestino = new Date(fechaBase.getTime()); fechaDestino.setHours(12, 0, 0, 0); fechaDestino.setDate(fechaDestino.getDate() + (currentWeekOffset * 7) + offsetDia); let iso = toLocalISO(fechaDestino); 
+                    let fechaDestino = new Date(fechaBase.getTime()); 
+                    fechaDestino.setHours(12, 0, 0, 0); 
+                    fechaDestino.setDate(fechaDestino.getDate() + (currentWeekOffset * 7) + offsetDia); 
+                    let iso = toLocalISO(fechaDestino); 
                     
                     if(!appDB.fechas[iso]) appDB.fechas[iso] = { evento: "", contexto: { condicional:"", emocional:"", transversal:"" }, tareas: [] };
                     if(!appDB.fechas[iso].tareas) appDB.fechas[iso].tareas = []; 
 
-                    let tecDef = celdas[1] ? celdas[1].trim() : ""; let tecOf = celdas[2] ? celdas[2].trim() : ""; let tacDef = celdas[3] ? celdas[3].trim() : ""; let tacOf = celdas[4] ? celdas[4].trim() : ""; let cond = celdas[5] ? celdas[5].trim() : ""; let emo = celdas[6] ? celdas[6].trim() : ""; let ignorar = ["TÉCNICA", "TECNICA", "TÁCTICA", "TACTICA", "CONDICIONAL", "EMOCIONAL", "DÍA", "DIA"];
+                    let tecDef = celdas[1] ? celdas[1].trim() : ""; 
+                    let tecOf = celdas[2] ? celdas[2].trim() : ""; 
+                    let tacDef = celdas[3] ? celdas[3].trim() : ""; 
+                    let tacOf = celdas[4] ? celdas[4].trim() : ""; 
+                    let cond = celdas[5] ? celdas[5].trim() : ""; 
+                    let emo = celdas[6] ? celdas[6].trim() : ""; 
+                    let ignorar = ["TÉCNICA", "TECNICA", "TÁCTICA", "TACTICA", "CONDICIONAL", "EMOCIONAL", "DÍA", "DIA"];
+                    
                     if (tecDef && !ignorar.some(palabra => tecDef.toUpperCase().includes(palabra))) { appDB.fechas[iso].tareas.push({ bloqueID: "tecnica_defensiva", bloqueTexto: "🛡️ Téc. Defensiva", gesto: tecDef, encadenado: "", cognitiva: 2, status: 'planned', naturaleza: 'semi_analitica', calidad: 0, duracion: 15, rpe: 5, carga: 75 }); appDB.statsBloques["tecnica_defensiva"]=(appDB.statsBloques["tecnica_defensiva"]||0)+1; appDB.statsGestos[tecDef] = (appDB.statsGestos[tecDef] || 0) + 1; tareasAñadidas++;}
                     if (tecOf && !ignorar.some(palabra => tecOf.toUpperCase().includes(palabra))) { appDB.fechas[iso].tareas.push({ bloqueID: "tecnica_ofensiva", bloqueTexto: "⚔️ Téc. Ofensiva", gesto: tecOf, encadenado: "", cognitiva: 2, status: 'planned', naturaleza: 'semi_analitica', calidad: 0, duracion: 15, rpe: 5, carga: 75 }); appDB.statsBloques["tecnica_ofensiva"]=(appDB.statsBloques["tecnica_ofensiva"]||0)+1; appDB.statsGestos[tecOf] = (appDB.statsGestos[tecOf] || 0) + 1; tareasAñadidas++;}
                     if (tacDef && !ignorar.some(palabra => tacDef.toUpperCase().includes(palabra))) { appDB.fechas[iso].tareas.push({ bloqueID: "tactica_defensiva", bloqueTexto: "🛑 Tác. Defensiva", gesto: tacDef, encadenado: "", cognitiva: 3, status: 'planned', naturaleza: 'semi_analitica', calidad: 0, duracion: 20, rpe: 6, carga: 120 }); appDB.statsBloques["tactica_defensiva"]=(appDB.statsBloques["tactica_defensiva"]||0)+1; appDB.statsGestos[tacDef] = (appDB.statsGestos[tacDef] || 0) + 1; tareasAñadidas++;}
@@ -555,7 +617,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         }
-        guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); importModal.classList.add('hidden'); document.getElementById('ia-raw-text').value = ""; window.mostrarAlerta("🤖 Traductor Completado", `Se han volcado ${tareasAñadidas} tareas al mes actual.`, false);
+        guardarBaseDeDatos(); 
+        if(window.pintarDatosGuardados) window.pintarDatosGuardados(); 
+        importModal.classList.add('hidden'); 
+        document.getElementById('ia-raw-text').value = ""; 
+        window.mostrarAlerta("🤖 Traductor Completado", `Se han volcado ${tareasAñadidas} tareas a los meses correspondientes.`, false);
     });
 
     // COMPARATIVA HISTÓRICA
