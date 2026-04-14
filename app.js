@@ -330,7 +330,8 @@ function analizarGesto(gesto, bloque) {
 
 function toLocalISO(dateObj) { const d = new Date(dateObj); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function getMonday(d) { d = new Date(d); let day = d.getDay(), diff = d.getDate() - day + (day === 0 ? -6 : 1); return new Date(d.setDate(diff)); }
-function formatWeekTitle(lunes) { let domingo = new Date(lunes); domingo.setDate(domingo.getDate() + 6); return `Semana del ${lunes.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })} al ${domingo.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}`; }
+const nombresMesesPdf = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+function formatWeekTitle(lunes) { let domingo = new Date(lunes); domingo.setDate(domingo.getDate() + 6); return `Semana del ${lunes.getDate()} de ${nombresMesesPdf[lunes.getMonth()].substring(0,3).toLowerCase()} al ${domingo.getDate()} de ${nombresMesesPdf[domingo.getMonth()].substring(0,3).toLowerCase()}`; }
 function getPrimerLunesMeso(d) { let firstDay = new Date(d.getFullYear(), d.getMonth(), 1); let day = firstDay.getDay() === 0 ? 7 : firstDay.getDay(); if (day > 4) { firstDay.setDate(firstDay.getDate() + (8 - day)); } else { firstDay.setDate(firstDay.getDate() - (day - 1)); } return firstDay; }
 function getUltimoLunesMeso(d) { let lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0); let day = lastDay.getDay() === 0 ? 7 : lastDay.getDay(); if (day < 4) { lastDay.setDate(lastDay.getDate() - day - 6); } else { lastDay.setDate(lastDay.getDate() - (day - 1)); } return lastDay; }
 
@@ -378,7 +379,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('select-objetivo').addEventListener('change', (e) => { appDB.objetivoCiclo = e.target.value; guardarBaseDeDatos(); });
     const selectCiclo = document.getElementById('select-ciclo'); const calendarioContainer = document.getElementById('calendario-container');
     
-    // ASIGNACIÓN GLOBAL SEGURO
     window.generarCalendario = function(tipoCiclo) {
         calendarioContainer.innerHTML = ''; const hoy = new Date(); hoy.setHours(0, 0, 0, 0); let fechaInicioIteracion, numSemanas = 0;
         if (tipoCiclo === 'micro') { fechaInicioIteracion = getMonday(hoy); numSemanas = 1; } 
@@ -441,7 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let viaSalida = (bloqueValue === 'tactica_ofensiva') ? document.getElementById('select-via-salida').value : null;
 
         if (gesto && bloqueValue) {
-            gesto = gesto.replace(/[.#$\[\]/]/g, ''); // Limpiar gesto
+            gesto = gesto.replace(/[.#$\[\]/]/g, ''); 
             let fechaGuardar = new Date(diaYsemanaActual + "T12:00:00"); fechaGuardar.setDate(fechaGuardar.getDate() + 1); let isoManana = toLocalISO(fechaGuardar); 
             let partidoMañana = (appDB.fechas[isoManana] && appDB.fechas[isoManana].evento === 'partido'); const analisis = analizarGesto(gesto, bloqueValue);
             if(partidoMañana && analisis.cargaTen === 3) { window.mostrarAlerta("🚨 ALERTA MÉDICA: PROTOCOLO MD-1", `Mañana hay partido. Prohibido introducir gestos de alta tensión articular (${gesto}) hoy.`, true, true); return; }
@@ -461,7 +461,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-limpiar-dia').addEventListener('click', (e) => { e.preventDefault(); if(appDB.fechas[diaYsemanaActual]) { delete appDB.fechas[diaYsemanaActual]; guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); window.mostrarAlerta("🗑️ Día Limpiado", "Planificación eliminada.", false); } window.cerrarModal(); });
     window.limpiarSemana = function(isoLunes) { if(confirm("¿Seguro que quieres borrar TODA la planificación de esta semana?")) { let fechaLunes = new Date(isoLunes + "T12:00:00"); for(let i=0; i<7; i++) { let fd = new Date(fechaLunes); fd.setDate(fd.getDate() + i); let iso = toLocalISO(fd); if(appDB.fechas[iso]) { delete appDB.fechas[iso]; } } guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); window.mostrarAlerta("🗑️ Semana Limpiada", "Toda la semana eliminada.", false); } };
 
-    // --- RECONSTRUCCIÓN DEL MODAL DE AÑADIR ---
     const modal = document.getElementById('add-modal');
     window.abrirModal = (idUnico, tituloFormateado) => { 
         diaYsemanaActual = idUnico; 
@@ -532,7 +531,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.toggleTaskStatus = function(fechaISO, taskIndex, nuevoStatus) { appDB.fechas[fechaISO].tareas[taskIndex].status = nuevoStatus; if(nuevoStatus === 'done' && !appDB.fechas[fechaISO].tareas[taskIndex].calidad) { appDB.fechas[fechaISO].tareas[taskIndex].calidad = 2; } guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); if(window.renderizarGraficos) window.renderizarGraficos(); };
     window.setTaskQuality = function(fechaISO, taskIndex, calidad) { appDB.fechas[fechaISO].tareas[taskIndex].calidad = calidad; guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); };
 
-    // --- AUTOGENERADOR ---
     const autogenModal = document.getElementById('autogen-modal'); document.getElementById('btn-open-autogen').addEventListener('click', () => autogenModal.classList.remove('hidden')); document.getElementById('btn-close-autogen').addEventListener('click', () => autogenModal.classList.add('hidden')); function getLeastUsedTask(poolArray) { let minReps = Infinity; let bestTask = poolArray[0]; poolArray.forEach(task => { let reps = appDB.statsGestos[task.g] || 0; if(reps < minReps) { minReps = reps; bestTask = task; } }); return bestTask; }
     document.getElementById('btn-ejecutar-ia').addEventListener('click', () => {
         let diaPartido = parseInt(document.getElementById('ia-dia-partido').value); let perfilRival = document.getElementById('ia-perfil-rival').value; let trainingDaysNodes = document.querySelectorAll('input[name="ia-train-day"]:checked'); let trainingDays = Array.from(trainingDaysNodes).map(cb => parseInt(cb.value));
@@ -543,7 +541,6 @@ document.addEventListener('DOMContentLoaded', () => {
         guardarBaseDeDatos(); if(window.pintarDatosGuardados) window.pintarDatosGuardados(); autogenModal.classList.add('hidden'); window.mostrarAlerta("🪄 IA Mágica", "Semana generada asegurando máxima variabilidad.", false);
     });
 
-    // --- IMPORTADOR INTELIGENTE MULTI-MES SANITIZADO ---
     function sanitizeText(str) { return str ? str.replace(/[.#$\[\]/]/g, '') : ""; }
 
     const importModal = document.getElementById('import-text-modal'); document.getElementById('btn-open-import').addEventListener('click', () => importModal.classList.remove('hidden')); document.getElementById('btn-close-import').addEventListener('click', () => importModal.classList.add('hidden'));
@@ -565,18 +562,16 @@ document.addEventListener('DOMContentLoaded', () => {
             let l = lines[i]; 
             let upperLine = l.toUpperCase();
             
-            // 1. DETECTAR MES EN EL TEXTO Y AJUSTAR EL CALENDARIO
             let mesEncontrado = mesesNombres.findIndex(m => upperLine.includes(m));
             let esCabeceraMes = mesEncontrado !== -1 && upperLine.length < 80 && (upperLine.includes('—') || upperLine.includes('-') || upperLine.includes('🎯') || /[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(upperLine) || upperLine.charCodeAt(0) > 255);
             
             if (esCabeceraMes) {
                 let targetYear = mesEncontrado >= 6 ? startYear : startYear + 1;
                 fechaBase = getPrimerLunesMeso(new Date(targetYear, mesEncontrado, 1));
-                currentWeekOffset = 0; // Reseteamos la semana al saltar de mes
+                currentWeekOffset = 0; 
                 continue;
             }
 
-            // 2. DETECTAR MICROCICLO
             if(upperLine.includes('MICROCICLO')) { 
                 let match = upperLine.match(/MICROCICLO\s*(\d+)/i); 
                 if(match) { currentWeekOffset = parseInt(match[1]) - 1; } 
@@ -584,7 +579,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 continue; 
             }
             
-            // 3. PARSEAR DÍAS Y TAREAS
             let celdas = l.split(/\t/); 
             if(celdas.length < 3) celdas = l.split(/\s{3,}/); 
             let diaTexto = celdas[0].toUpperCase(); 
@@ -617,7 +611,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(!appDB.fechas[iso]) appDB.fechas[iso] = { evento: "", contexto: { condicional:"", emocional:"", transversal:"" }, tareas: [] };
                     if(!appDB.fechas[iso].tareas) appDB.fechas[iso].tareas = []; 
 
-                    // ELIMINAMOS PUNTOS O CARACTERES RAROS DIRECTAMENTE DEL EXCEL/WORD
                     let tecDef = sanitizeText(celdas[1]); 
                     let tecOf = sanitizeText(celdas[2]); 
                     let tacDef = sanitizeText(celdas[3]); 
@@ -643,7 +636,6 @@ document.addEventListener('DOMContentLoaded', () => {
         window.mostrarAlerta("🤖 Traductor Completado", `Se han volcado ${tareasAñadidas} tareas a los meses correspondientes.`, false);
     });
 
-    // COMPARATIVA HISTÓRICA
     function poblarSelectoresComparativa() {
         let mesesUnicos = new Set(); Object.keys(appDB.fechas).forEach(iso => { mesesUnicos.add(iso.substring(0, 7)); }); let mesesArr = Array.from(mesesUnicos).sort(); let selA = document.getElementById('compare-mes-a'); let selB = document.getElementById('compare-mes-b'); selA.innerHTML = ''; selB.innerHTML = '';
         if(mesesArr.length === 0) { selA.innerHTML = '<option value="">Sin datos</option>'; selB.innerHTML = '<option value="">Sin datos</option>'; return; }
@@ -667,10 +659,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ----------------------------------------------------
-    // EXPORTACIÓN PREMIUM DE CALENDARIO PDF 
+    // EXPORTACIÓN PREMIUM DE CALENDARIO PDF - 1 SOLA PÁGINA
     // ----------------------------------------------------
     document.getElementById('btn-export-calendario').addEventListener('click', () => { 
-        window.mostrarAlerta("⏳ Generando Informe", "Construyendo documento PDF premium...", false);
+        window.mostrarAlerta("⏳ Generando Informe", "Construyendo documento PDF en una página...", false);
         
         const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
         const tipoCiclo = document.getElementById('select-ciclo').value;
@@ -684,15 +676,14 @@ document.addEventListener('DOMContentLoaded', () => {
         let fechasPartidos = []; 
         for (const [f, d] of Object.entries(appDB.fechas)) { if(d.evento === 'partido') fechasPartidos.push(new Date(f + "T12:00:00").getTime()); }
 
-        let html = `<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; background: #fff; width: 297mm; min-height: 210mm;">`;
+        let html = `<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; background: #fff; width: 297mm;">`;
         
-        // Lógica de fechas
         const mesesTexto = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
         let dFinCiclo = new Date(fechaInicioIteracion);
         dFinCiclo.setDate(dFinCiclo.getDate() + (numSemanas * 7) - 1);
         let strFechas = `DEL ${fechaInicioIteracion.getDate()} DE ${mesesTexto[fechaInicioIteracion.getMonth()]} AL ${dFinCiclo.getDate()} DE ${mesesTexto[dFinCiclo.getMonth()]}`;
 
-        // --- PORTADA MODIFICADA (FONDO AZUL CORPORATIVO Y ESCUDO CENTRADO) ---
+        // PORTADA
         html += `
         <div style="width: 297mm; height: 210mm; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #003366; page-break-after: always; box-sizing: border-box; text-align: center; border-bottom: 25px solid #CB3524; color: white;">
             <img src="ESCUDO_ATM.png" style="height: 220px; margin-bottom: 40px; object-fit: contain;">
@@ -707,38 +698,39 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         `;
 
-        // --- PÁGINAS DE CONTENIDO ---
+        // PÁGINAS DE CONTENIDO (ESTRICTAMENTE 1 PÁGINA POR SEMANA)
         for (let s = 0; s < numSemanas; s++) {
             let fechaSemana = new Date(fechaInicioIteracion); fechaSemana.setDate(fechaSemana.getDate() + (s * 7));
             let pageBreak = s < numSemanas - 1 ? 'page-break-after: always;' : ''; 
 
-            html += `<div style="${pageBreak} width: 297mm; height: 210mm; padding: 15mm; box-sizing: border-box; background: white; display: flex; flex-direction: column;">`;
+            // CONTENEDOR BLOQUEADO A 209MM PARA EVITAR CORTE DE CANVAS
+            html += `<div style="${pageBreak} width: 297mm; height: 209mm; padding: 10mm; box-sizing: border-box; background: white; display: flex; flex-direction: column; overflow: hidden;">`;
             
             html += `
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid #003366; padding-bottom: 12px; margin-bottom: 20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid #003366; padding-bottom: 8px; margin-bottom: 12px;">
                     <div>
-                        <h1 style="color: #003366; margin:0; font-size:26px; text-transform:uppercase; font-weight: 900; letter-spacing: 1px;">Planificación Metodológica</h1>
-                        <h2 style="color: #CB3524; margin:5px 0 0 0; font-size:15px; font-weight: bold; text-transform: uppercase;">ADN Keeper Methodology - Área de Porteros</h2>
+                        <h1 style="color: #003366; margin:0; font-size:22px; text-transform:uppercase; font-weight: 900; letter-spacing: 1px;">Planificación Metodológica</h1>
+                        <h2 style="color: #CB3524; margin:4px 0 0 0; font-size:13px; font-weight: bold; text-transform: uppercase;">ADN Keeper Methodology - Área de Porteros</h2>
                     </div>
                     <div style="text-align: right;">
-                        <h3 style="margin:0; font-size: 18px; color: #444; font-weight: bold;">${formatWeekTitle(fechaSemana)}</h3>
-                        <p style="margin:5px 0 0 0; font-size: 13px; color: #888; text-transform: uppercase; font-weight: 600;">Ciclo: ${tipoCiclo}</p>
+                        <h3 style="margin:0; font-size: 16px; color: #444; font-weight: bold;">${formatWeekTitle(fechaSemana)}</h3>
+                        <p style="margin:4px 0 0 0; font-size: 11px; color: #888; text-transform: uppercase; font-weight: 600;">Ciclo: ${tipoCiclo}</p>
                     </div>
                 </div>
             `;
 
-            html += `<div style="display: flex; gap: 10px; width: 100%; flex-grow: 1; align-items: stretch;">`;
+            html += `<div style="display: flex; gap: 8px; width: 100%; flex-grow: 1; align-items: stretch;">`;
             
             for (let d = 0; d < 7; d++) {
                 let fechaDia = new Date(fechaSemana); fechaDia.setDate(fechaDia.getDate() + d); let iso = toLocalISO(fechaDia);
                 let data = appDB.fechas[iso] || {};
 
-                html += `<div style="flex: 1; border: 1px solid #e1e5eb; border-top: 5px solid #003366; border-radius: 10px; padding: 12px; background: #fdfdff; display: flex; flex-direction: column; box-shadow: 0 4px 10px rgba(0,0,0,0.02);">`;
+                html += `<div style="flex: 1; border: 1px solid #e1e5eb; border-top: 4px solid #003366; border-radius: 8px; padding: 8px; background: #fdfdff; display: flex; flex-direction: column; box-shadow: 0 4px 10px rgba(0,0,0,0.02);">`;
                 
-                html += `<div style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start;">
+                html += `<div style="border-bottom: 1px solid #eee; padding-bottom: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-start;">
                             <div>
-                                <span style="font-weight: 900; color: #003366; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;">${fechaDia.toLocaleDateString('es-ES', {weekday: 'long'})}</span><br>
-                                <span style="color: #777; font-size: 12px; font-weight: 600;">${fechaDia.toLocaleDateString('es-ES', {day: '2-digit', month: 'short'})}</span>
+                                <span style="font-weight: 900; color: #003366; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">${fechaDia.toLocaleDateString('es-ES', {weekday: 'long'})}</span><br>
+                                <span style="color: #777; font-size: 11px; font-weight: 600;">${fechaDia.toLocaleDateString('es-ES', {day: '2-digit', month: 'short'})}</span>
                             </div>`;
                 
                 if(fechasPartidos.length > 0 && data.evento !== 'partido') {
@@ -748,19 +740,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     if(diffDays >= -5 && diffDays <= 2) { 
                         let txtMD = diffDays > 0 ? `MD+${diffDays}` : `MD${diffDays}`; 
                         let bgMD = diffDays === -1 ? '#CB3524' : (diffDays === -2 ? '#FF9800' : '#333');
-                        html += `<span style="background: ${bgMD}; color: white; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; height: fit-content;">${txtMD}</span>`;
+                        html += `<span style="background: ${bgMD}; color: white; padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; height: fit-content;">${txtMD}</span>`;
                     }
                 }
                 html += `</div>`;
 
-                if(data.evento === 'partido') html += `<div style="background: #ffebee; color: #c62828; font-size: 13px; padding: 10px; text-align: center; border-radius: 8px; border: 1px solid #ffcdd2; font-weight: 900; margin-bottom: 12px; letter-spacing: 0.5px;">DÍA DE PARTIDO</div>`;
-                else if(data.evento === 'descanso') html += `<div style="background: #e8f5e9; color: #2e7d32; font-size: 13px; padding: 10px; text-align: center; border-radius: 8px; border: 1px dashed #81c784; font-weight: 900; margin-bottom: 12px; letter-spacing: 0.5px;">DESCANSO</div>`;
-                else if(data.evento === 'desplazamiento') html += `<div style="background: #e3f2fd; color: #1565c0; font-size: 13px; padding: 10px; text-align: center; border-radius: 8px; border: 1px solid #90caf9; font-weight: 900; margin-bottom: 12px; letter-spacing: 0.5px;">DESPLAZAMIENTO</div>`;
+                if(data.evento === 'partido') html += `<div style="background: #ffebee; color: #c62828; font-size: 11px; padding: 6px; text-align: center; border-radius: 6px; border: 1px solid #ffcdd2; font-weight: 900; margin-bottom: 8px; letter-spacing: 0.5px;">DÍA DE PARTIDO</div>`;
+                else if(data.evento === 'descanso') html += `<div style="background: #e8f5e9; color: #2e7d32; font-size: 11px; padding: 6px; text-align: center; border-radius: 6px; border: 1px dashed #81c784; font-weight: 900; margin-bottom: 8px; letter-spacing: 0.5px;">DESCANSO</div>`;
+                else if(data.evento === 'desplazamiento') html += `<div style="background: #e3f2fd; color: #1565c0; font-size: 11px; padding: 6px; text-align: center; border-radius: 6px; border: 1px solid #90caf9; font-weight: 900; margin-bottom: 8px; letter-spacing: 0.5px;">DESPLAZAMIENTO</div>`;
 
                 if(data.contexto && (data.contexto.condicional || data.contexto.emocional)) {
-                    html += `<div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed #ddd;">`;
-                    if(data.contexto.condicional) html += `<div style="font-size: 11px; color: #e65100; background: #fff3e0; padding: 6px 8px; margin-bottom: 6px; border-radius: 6px; font-weight: 800;">COND: ${data.contexto.condicional}</div>`;
-                    if(data.contexto.emocional) html += `<div style="font-size: 11px; color: #880e4f; background: #fce4ec; padding: 6px 8px; border-radius: 6px; font-weight: 800;">EMOC: ${data.contexto.emocional}</div>`;
+                    html += `<div style="margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed #ddd;">`;
+                    if(data.contexto.condicional) html += `<div style="font-size: 9px; color: #e65100; background: #fff3e0; padding: 4px 6px; margin-bottom: 4px; border-radius: 4px; font-weight: 800;">COND: ${data.contexto.condicional}</div>`;
+                    if(data.contexto.emocional) html += `<div style="font-size: 9px; color: #880e4f; background: #fce4ec; padding: 4px 6px; border-radius: 4px; font-weight: 800;">EMOC: ${data.contexto.emocional}</div>`;
                     html += `</div>`;
                 }
 
@@ -774,12 +766,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         let cleanBloque = t.bloqueTexto.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ.\s]/g, '').trim();
 
-                        html += `<div style="border-left: 5px solid ${borderColor}; background: ${bgColor}; padding: 10px; margin-bottom: 10px; border-radius: 0 8px 8px 0; border-top: 1px solid rgba(0,0,0,0.03); border-right: 1px solid rgba(0,0,0,0.03); border-bottom: 1px solid rgba(0,0,0,0.03);">
-                                    <strong style="color: ${borderColor}; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">${cleanBloque}</strong><br>
-                                    <span style="font-weight: 900; color: #222; font-size: 12px; display: block; margin: 4px 0;">${t.gesto}</span>
-                                    <div style="font-size: 10px; color: #555; display: flex; justify-content: space-between; font-weight: bold; align-items: center;">
+                        html += `<div style="border-left: 4px solid ${borderColor}; background: ${bgColor}; padding: 6px 8px; margin-bottom: 6px; border-radius: 0 6px 6px 0; border-top: 1px solid rgba(0,0,0,0.03); border-right: 1px solid rgba(0,0,0,0.03); border-bottom: 1px solid rgba(0,0,0,0.03); page-break-inside: avoid;">
+                                    <strong style="color: ${borderColor}; font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.5px;">${cleanBloque}</strong><br>
+                                    <span style="font-weight: 900; color: #222; font-size: 11px; display: block; margin: 3px 0; line-height: 1.1;">${t.gesto}</span>
+                                    <div style="font-size: 8.5px; color: #555; display: flex; justify-content: space-between; font-weight: bold; align-items: center;">
                                         <span>${t.duracion}m | RPE ${t.rpe}</span>
-                                        ${t.viaSalida ? `<span style="background: #fff; border: 1px solid #ddd; padding: 2px 5px; border-radius: 4px; color:#e65100;">Vía ${t.viaSalida}</span>` : ''}
+                                        ${t.viaSalida ? `<span style="background: #fff; border: 1px solid #ddd; padding: 2px 4px; border-radius: 3px; color:#e65100;">Vía ${t.viaSalida}</span>` : ''}
                                     </div>
                                  </div>`;
                     });
@@ -800,9 +792,11 @@ document.addEventListener('DOMContentLoaded', () => {
             html2canvas:  { 
                 scale: 2, 
                 useCORS: true, 
-                letterRendering: true
+                letterRendering: true,
+                scrollY: 0
             }, 
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' },
+            pagebreak:    { mode: 'css', avoid: '.week-container' }
         };
 
         html2pdf().set(opciones).from(html).save();
