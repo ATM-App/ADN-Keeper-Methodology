@@ -256,7 +256,6 @@ const alternativasInteligentes = { "1vs1: Cruz": { msg: "Sugerencia: Mantén la 
 
 let appDB = {}; 
 
-// BLINDAJE: Sanitizador reconstruye arrays y recalcula desde cero limpiando caracteres inválidos (. # $ [ ] /)
 function sanitizeDB(db) {
     if(!db) db = {};
     if(!db.fechas) db.fechas = {};
@@ -268,11 +267,9 @@ function sanitizeDB(db) {
         if(!db.fechas[iso].tareas) db.fechas[iso].tareas = [];
         if(!db.fechas[iso].contexto) db.fechas[iso].contexto = { condicional: "", emocional: "", transversal: "" };
         
-        // Reconstrucción inteligente de métricas para reparar memorias corruptas
         db.fechas[iso].tareas.forEach(t => {
             if(t.bloqueID) newStatsBloques[t.bloqueID] = (newStatsBloques[t.bloqueID] || 0) + 1;
             if(t.gesto) {
-                // Forzamos que los gestos viejos guarden sin caracteres prohibidos
                 t.gesto = t.gesto.replace(/[.#$\[\]/]/g, '').trim();
                 newStatsGestos[t.gesto] = (newStatsGestos[t.gesto] || 0) + 1;
             }
@@ -444,7 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let viaSalida = (bloqueValue === 'tactica_ofensiva') ? document.getElementById('select-via-salida').value : null;
 
         if (gesto && bloqueValue) {
-            gesto = gesto.replace(/[.#$\[\]/]/g, ''); // Limpiar gesto para evitar caída en Firebase
+            gesto = gesto.replace(/[.#$\[\]/]/g, ''); // Limpiar gesto
             let fechaGuardar = new Date(diaYsemanaActual + "T12:00:00"); fechaGuardar.setDate(fechaGuardar.getDate() + 1); let isoManana = toLocalISO(fechaGuardar); 
             let partidoMañana = (appDB.fechas[isoManana] && appDB.fechas[isoManana].evento === 'partido'); const analisis = analizarGesto(gesto, bloqueValue);
             if(partidoMañana && analisis.cargaTen === 3) { window.mostrarAlerta("🚨 ALERTA MÉDICA: PROTOCOLO MD-1", `Mañana hay partido. Prohibido introducir gestos de alta tensión articular (${gesto}) hoy.`, true, true); return; }
@@ -669,8 +666,148 @@ document.addEventListener('DOMContentLoaded', () => {
         actThermo('thermo-status-a', 'thermo-compare-a', statsA); actThermo('thermo-status-b', 'thermo-compare-b', statsB); document.getElementById('compare-results-container').classList.remove('hidden');
     });
 
-    // EXPORTACIONES A PDF / PPTX
-    document.getElementById('btn-export-calendario').addEventListener('click', () => { html2pdf().set({ margin: 5, filename: `Planificacion.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } }).from(document.getElementById('calendario-container')).save(); });
+    // ----------------------------------------------------
+    // EXPORTACIÓN PREMIUM DE CALENDARIO PDF 
+    // ----------------------------------------------------
+    document.getElementById('btn-export-calendario').addEventListener('click', () => { 
+        window.mostrarAlerta("⏳ Generando Informe", "Construyendo documento PDF premium...", false);
+        
+        const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+        const tipoCiclo = document.getElementById('select-ciclo').value;
+        let fechaInicioIteracion, numSemanas = 0;
+        let txtCicloPortada = "";
+
+        if (tipoCiclo === 'micro') { fechaInicioIteracion = getMonday(hoy); numSemanas = 1; txtCicloPortada = "MICROCICLO SEMANAL"; } 
+        else if (tipoCiclo === 'meso') { let primerLunes = getPrimerLunesMeso(hoy); let ultimoLunes = getUltimoLunesMeso(hoy); fechaInicioIteracion = new Date(primerLunes); numSemanas = Math.round((ultimoLunes - primerLunes) / (7 * 24 * 60 * 60 * 1000)) + 1; txtCicloPortada = "MESOCICLO MENSUAL"; } 
+        else if (tipoCiclo === 'macro') { let startYear = hoy.getMonth() >= 6 ? hoy.getFullYear() : hoy.getFullYear() - 1; let dAgosto = new Date(startYear, 7, 1); fechaInicioIteracion = getPrimerLunesMeso(dAgosto); let dJunio = new Date(startYear + 1, 5, 30); let ultimoLunes = getUltimoLunesMeso(dJunio); numSemanas = Math.round((ultimoLunes - fechaInicioIteracion) / (7 * 24 * 60 * 60 * 1000)) + 1; txtCicloPortada = "MACROCICLO ANUAL"; }
+
+        let fechasPartidos = []; 
+        for (const [f, d] of Object.entries(appDB.fechas)) { if(d.evento === 'partido') fechasPartidos.push(new Date(f + "T12:00:00").getTime()); }
+
+        let html = `<div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; background: #fff; width: 297mm; min-height: 210mm;">`;
+        
+        // Lógica de fechas
+        const mesesTexto = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+        let dFinCiclo = new Date(fechaInicioIteracion);
+        dFinCiclo.setDate(dFinCiclo.getDate() + (numSemanas * 7) - 1);
+        let strFechas = `DEL ${fechaInicioIteracion.getDate()} DE ${mesesTexto[fechaInicioIteracion.getMonth()]} AL ${dFinCiclo.getDate()} DE ${mesesTexto[dFinCiclo.getMonth()]}`;
+
+        // --- PORTADA MODIFICADA (FONDO AZUL CORPORATIVO Y ESCUDO CENTRADO) ---
+        html += `
+        <div style="width: 297mm; height: 210mm; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #003366; page-break-after: always; box-sizing: border-box; text-align: center; border-bottom: 25px solid #CB3524; color: white;">
+            <img src="ESCUDO_ATM.png" style="height: 220px; margin-bottom: 40px; object-fit: contain;">
+            <h1 style="font-size: 55px; font-weight: 900; margin: 0; color: white; text-transform: uppercase; letter-spacing: 1px;">PLANIFICACIÓN METODOLÓGICA</h1>
+            <div style="height: 5px; width: 120px; background-color: white; margin: 25px auto;"></div>
+            <h2 style="font-size: 28px; font-weight: 300; margin: 0; color: #f0f0f0; letter-spacing: 5px; text-transform: uppercase;">ADN Keeper Methodology</h2>
+            <div style="margin-top: 50px; background-color: rgba(255,255,255,0.1); padding: 15px 40px; border-radius: 40px; border: 1px solid rgba(255,255,255,0.2);">
+                <span style="font-size: 24px; font-weight: bold; color: #FF9800; text-transform: uppercase;">${txtCicloPortada}</span>
+                <span style="font-size: 15px; font-weight: bold; color: white; text-transform: uppercase; letter-spacing: 1px; margin-top: 8px; display: block;">${strFechas}</span>
+            </div>
+            <p style="position: absolute; bottom: 35px; color: rgba(255,255,255,0.7); font-size: 14px; font-weight: bold;">ÁREA DE PORTEROS</p>
+        </div>
+        `;
+
+        // --- PÁGINAS DE CONTENIDO ---
+        for (let s = 0; s < numSemanas; s++) {
+            let fechaSemana = new Date(fechaInicioIteracion); fechaSemana.setDate(fechaSemana.getDate() + (s * 7));
+            let pageBreak = s < numSemanas - 1 ? 'page-break-after: always;' : ''; 
+
+            html += `<div style="${pageBreak} width: 297mm; height: 210mm; padding: 15mm; box-sizing: border-box; background: white; display: flex; flex-direction: column;">`;
+            
+            html += `
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 3px solid #003366; padding-bottom: 12px; margin-bottom: 20px;">
+                    <div>
+                        <h1 style="color: #003366; margin:0; font-size:26px; text-transform:uppercase; font-weight: 900; letter-spacing: 1px;">Planificación Metodológica</h1>
+                        <h2 style="color: #CB3524; margin:5px 0 0 0; font-size:15px; font-weight: bold; text-transform: uppercase;">ADN Keeper Methodology - Área de Porteros</h2>
+                    </div>
+                    <div style="text-align: right;">
+                        <h3 style="margin:0; font-size: 18px; color: #444; font-weight: bold;">${formatWeekTitle(fechaSemana)}</h3>
+                        <p style="margin:5px 0 0 0; font-size: 13px; color: #888; text-transform: uppercase; font-weight: 600;">Ciclo: ${tipoCiclo}</p>
+                    </div>
+                </div>
+            `;
+
+            html += `<div style="display: flex; gap: 10px; width: 100%; flex-grow: 1; align-items: stretch;">`;
+            
+            for (let d = 0; d < 7; d++) {
+                let fechaDia = new Date(fechaSemana); fechaDia.setDate(fechaDia.getDate() + d); let iso = toLocalISO(fechaDia);
+                let data = appDB.fechas[iso] || {};
+
+                html += `<div style="flex: 1; border: 1px solid #e1e5eb; border-top: 5px solid #003366; border-radius: 10px; padding: 12px; background: #fdfdff; display: flex; flex-direction: column; box-shadow: 0 4px 10px rgba(0,0,0,0.02);">`;
+                
+                html += `<div style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <span style="font-weight: 900; color: #003366; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;">${fechaDia.toLocaleDateString('es-ES', {weekday: 'long'})}</span><br>
+                                <span style="color: #777; font-size: 12px; font-weight: 600;">${fechaDia.toLocaleDateString('es-ES', {day: '2-digit', month: 'short'})}</span>
+                            </div>`;
+                
+                if(fechasPartidos.length > 0 && data.evento !== 'partido') {
+                    let currentT = fechaDia.getTime();
+                    let closestMatch = fechasPartidos.reduce((prev, curr) => Math.abs(curr - currentT) < Math.abs(prev - currentT) ? curr : prev);
+                    let diffDays = Math.round((currentT - closestMatch) / (1000 * 3600 * 24));
+                    if(diffDays >= -5 && diffDays <= 2) { 
+                        let txtMD = diffDays > 0 ? `MD+${diffDays}` : `MD${diffDays}`; 
+                        let bgMD = diffDays === -1 ? '#CB3524' : (diffDays === -2 ? '#FF9800' : '#333');
+                        html += `<span style="background: ${bgMD}; color: white; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; height: fit-content;">${txtMD}</span>`;
+                    }
+                }
+                html += `</div>`;
+
+                if(data.evento === 'partido') html += `<div style="background: #ffebee; color: #c62828; font-size: 13px; padding: 10px; text-align: center; border-radius: 8px; border: 1px solid #ffcdd2; font-weight: 900; margin-bottom: 12px; letter-spacing: 0.5px;">DÍA DE PARTIDO</div>`;
+                else if(data.evento === 'descanso') html += `<div style="background: #e8f5e9; color: #2e7d32; font-size: 13px; padding: 10px; text-align: center; border-radius: 8px; border: 1px dashed #81c784; font-weight: 900; margin-bottom: 12px; letter-spacing: 0.5px;">DESCANSO</div>`;
+                else if(data.evento === 'desplazamiento') html += `<div style="background: #e3f2fd; color: #1565c0; font-size: 13px; padding: 10px; text-align: center; border-radius: 8px; border: 1px solid #90caf9; font-weight: 900; margin-bottom: 12px; letter-spacing: 0.5px;">DESPLAZAMIENTO</div>`;
+
+                if(data.contexto && (data.contexto.condicional || data.contexto.emocional)) {
+                    html += `<div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed #ddd;">`;
+                    if(data.contexto.condicional) html += `<div style="font-size: 11px; color: #e65100; background: #fff3e0; padding: 6px 8px; margin-bottom: 6px; border-radius: 6px; font-weight: 800;">COND: ${data.contexto.condicional}</div>`;
+                    if(data.contexto.emocional) html += `<div style="font-size: 11px; color: #880e4f; background: #fce4ec; padding: 6px 8px; border-radius: 6px; font-weight: 800;">EMOC: ${data.contexto.emocional}</div>`;
+                    html += `</div>`;
+                }
+
+                if(data.tareas && data.tareas.length > 0) {
+                    data.tareas.forEach(t => {
+                        let borderColor = "#555"; let bgColor = "#f5f5f5";
+                        if(t.bloqueID === 'tecnica_defensiva') { borderColor = "#003366"; bgColor = "#e8f0fe"; }
+                        if(t.bloqueID === 'tecnica_ofensiva') { borderColor = "#00acc1"; bgColor = "#e0f7fa"; }
+                        if(t.bloqueID === 'tactica_defensiva') { borderColor = "#CB3524"; bgColor = "#ffebe9"; }
+                        if(t.bloqueID === 'tactica_ofensiva') { borderColor = "#ff9800"; bgColor = "#fff3e0"; }
+
+                        let cleanBloque = t.bloqueTexto.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ.\s]/g, '').trim();
+
+                        html += `<div style="border-left: 5px solid ${borderColor}; background: ${bgColor}; padding: 10px; margin-bottom: 10px; border-radius: 0 8px 8px 0; border-top: 1px solid rgba(0,0,0,0.03); border-right: 1px solid rgba(0,0,0,0.03); border-bottom: 1px solid rgba(0,0,0,0.03);">
+                                    <strong style="color: ${borderColor}; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">${cleanBloque}</strong><br>
+                                    <span style="font-weight: 900; color: #222; font-size: 12px; display: block; margin: 4px 0;">${t.gesto}</span>
+                                    <div style="font-size: 10px; color: #555; display: flex; justify-content: space-between; font-weight: bold; align-items: center;">
+                                        <span>${t.duracion}m | RPE ${t.rpe}</span>
+                                        ${t.viaSalida ? `<span style="background: #fff; border: 1px solid #ddd; padding: 2px 5px; border-radius: 4px; color:#e65100;">Vía ${t.viaSalida}</span>` : ''}
+                                    </div>
+                                 </div>`;
+                    });
+                }
+                
+                html += `</div>`; 
+            }
+            html += `</div>`; 
+            html += `</div>`; 
+        }
+        
+        html += `</div>`;
+
+        const opciones = {
+            margin:       0, 
+            filename:     `Planificacion_Premium_ADN_Keeper.pdf`,
+            image:        { type: 'jpeg', quality: 1 },
+            html2canvas:  { 
+                scale: 2, 
+                useCORS: true, 
+                letterRendering: true
+            }, 
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+        };
+
+        html2pdf().set(opciones).from(html).save();
+    });
+
     document.getElementById('btn-export-dashboard').addEventListener('click', () => { html2pdf().set({ margin: 10, filename: `Graficos.pdf`, image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } }).from(document.getElementById('pdf-dashboard')).save(); });
     document.getElementById('btn-memoria-anual').addEventListener('click', () => {
         let stats = appDB.statsBloques; let totalTareas = stats.tecnica_defensiva + stats.tecnica_ofensiva + stats.tactica_defensiva + stats.tactica_ofensiva; if(totalTareas === 0) return alert("Sin datos");
